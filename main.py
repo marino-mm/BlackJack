@@ -1,5 +1,6 @@
 from enum import StrEnum
 import random
+from typing import List
 
 
 class NoMoreCardsError(Exception):
@@ -83,22 +84,57 @@ class Deck:
 
 class BasePlayer:
     def __init__(self) -> None:
-        self.hand: list[Card] = []
+        self.hands: list[Hand] = [Hand()]
+
+    def display_hand(self, index: int = 0) -> None:
+        print(f"{self.hands[index]}")
+
+    def display_hands(self) -> None:
+        print(f"{self.hands}")
+
+class Player(BasePlayer):
+
+    def display_hands(self) -> None:
+        print(f"Player :{self.hands}")
+
+
+class House(BasePlayer):
+
+    def display_hand_partial(self):
+        print(f"House :{[self.hands[0].cards[0], '?']}")
+
+class Hand:
+    def __init__(self) -> None:
+        self.cards: List[Card] = []
         self.hand_value = 0
 
-    def display_hand(self):
-        pass
+    def __str__(self) -> str:
+        return f"{self.cards})"
 
-    def display_hand_value(self):
-        print(f"Value : {self.hand_value}")
+    def __repr__(self):
+        return str(self)
+
+    def display_hand(self):
+        print(self.cards)
+
+    def get_partial_hand_str(self):
+        return f"{[self.cards[0], '?']}"
+
+    def get_hand_str(self):
+        return f"{[self.cards]}"
 
     def add_card(self, card):
-        self.hand.append(card)
+        self.cards.append(card)
         self.calculate_hand_value()
+
+    def return_card(self, card):
+        card = self.cards.pop()
+        self.calculate_hand_value()
+        return card
 
     def calculate_hand_value(self):
         self.hand_value = 0
-        for card in self.hand:
+        for card in self.cards:
             if card.rank in ["J", "Q", "K"]:
                 self.hand_value += 10
             elif card.rank in list(range(2, 11)):
@@ -109,23 +145,10 @@ class BasePlayer:
                 else:
                     self.hand_value += 11
 
-
-class Player(BasePlayer):
-
-    def display_hand(self):
-        print(f"Player : {self.hand}")
-
-
-class House(BasePlayer):
-
-    def display_hand_partial(self):
-        print(f"House : {[self.hand[0], '?']}")
-
-
 class Game:
-    def __init__(self, playerNumber: int = 1) -> None:
+    def __init__(self, player_number: int = 1) -> None:
         self.players: list[Player] = []
-        for _ in range(playerNumber):
+        for _ in range(player_number):
             self.players.append(Player())
         self.house = House()
         self.deck = Deck()
@@ -134,27 +157,60 @@ class Game:
     def start_round(self):
         for _ in range(2):
             for player in self.players:
-                player.add_card(self.deck.get_card())
-            self.house.add_card(self.deck.get_card())
+                player.hands[0].add_card(self.deck.get_card())
+            self.house.hands[0].add_card(self.deck.get_card())
 
     def display_round(self):
         self.house.display_hand_partial()
         for player in self.players:
-            player.display_hand()
-            
-    def determin_round_winners(self):
-        winner_list = []
+            player.display_hands()
+
+    def display_round_end(self):
+        self.house.display_hand()
         for player in self.players:
-            if player.hand_value < 22:
-                if self.house.hand_value > 21:
-                    winner_list.append(player)
-                else:
-                    if player.hand_value > self.house.hand_value:
-                        winner_list.append(player)
+            player.display_hands()
+
+
+def test():
+    game = Game(3)
+    game.start_round()
+    for index, player in enumerate(game.players):
+        hand_index = 0
+        while hand_index < len(player.hands):
+            hand = player.hands[hand_index]
+            TURN_STATUS = "PLAYING"
+            while True:
+                if TURN_STATUS == "PLAYING":
+                    print(f"House: {game.house.hands[0].get_partial_hand_str()}")
+                    print(f"Player: {hand.get_hand_str()}")
+                    print(f"What will player {index} do?\n1) Hit\n2) Stand\n3) Double down\n4) Split")
+                    move = input("Your move: ")
+                    if move == "1":
+                        player.hands[0].add_card(game.deck.get_card())
+                        if player.hands[0].hand_value > 21:
+                            print("You have busted!")
+                            player.display_hand()
+                            TURN_STATUS = "STANDING"
+                    if move == "2":
+                        TURN_STATUS = "STANDING"
+                    if move == "3":
+                        player.hands[0].add_card(game.deck.get_card())
+                        TURN_STATUS = "STANDING"
+                    if move == "4":
+                        if hand.cards[0].rank == hand.cards[1].rank:
+                            player.hands.append(Hand())
+                            card = player.hand[hand_index].cards.pop()
+                            player.hands[-1].add_card(card)
+                            print("You have succesfully splited your hand!")
+                        else:
+                            print("You cant split your hand!")
+                elif TURN_STATUS == "STANDING":
+                    print("Your turn ended")
+                    break
+            hand_index += 1
+    print("\n\n\n")
+    game.display_round_end()
+    # input("Game ended!")
 
 if __name__ == "__main__":
-    game = Game(1)
-
-    game.start_round()
-    game.display_round()
-    
+    test()
