@@ -2,6 +2,7 @@ from enum import StrEnum
 import random
 from typing import List
 
+
 class NoMoreCardsError(Exception):
     pass
 
@@ -13,11 +14,29 @@ class CardNotInDeckError(Exception):
 class CantCompareObjectError(Exception):
     pass
 
+
 class CardSuit(StrEnum):
     HEARTS = "♥"
     DIAMONDS = "♦"
     CLUBS = "♣"
     SPADES = "♠"
+
+
+CARD_RANK_ORDER = {
+    "2": 2,
+    "3": 3,
+    "4": 4,
+    "5": 5,
+    "6": 6,
+    "7": 7,
+    "8": 8,
+    "9": 9,
+    "10": 10,
+    "J": 11,
+    "Q": 12,
+    "K": 13,
+    "A": 14,
+}
 
 
 class Card:
@@ -31,10 +50,14 @@ class Card:
     def __repr__(self):
         return str(self)
 
+    def __lt__(self, other):
+        return CARD_RANK_ORDER[self.rank] < CARD_RANK_ORDER[other.rank]
+
     def __eq__(self, value) -> bool:
         if not isinstance(value, Card):
             raise CantCompareObjectError
         return self.rank == value.rank and self.suit == value.suit
+
 
 class Deck:
     def __init__(self) -> None:
@@ -78,15 +101,16 @@ class Deck:
                 card_deck.append(Card(suit, rank))
         return card_deck
 
+
 class Hand:
-    def __init__(self, bid:int = 0) -> None:
+    def __init__(self, bid: int = 0) -> None:
         self.bid = bid
         self.cards: List[Card] = []
         self.hand_value = 0
         self.hand_status = "PLAYING"
 
     def __str__(self) -> str:
-        return f"{self.cards})"
+        return f"{self.cards}, Value :{self.hand_value})"
 
     def __repr__(self):
         return str(self)
@@ -118,11 +142,12 @@ class Hand:
     def calculate_hand_value(self):
         self.hand_value = 0
         card_rank_list = []
+        self.cards = sorted(self.cards)
         for card in self.cards:
             card_rank_list.append(card.rank)
             if card.rank in ["J", "Q", "K", "10"]:
                 self.hand_value += 10
-            elif card.rank in list(range(2, 10)):
+            elif card.rank in list(map(str, range(2, 10))):
                 self.hand_value += int(card.rank)
             else:
                 if self.hand_value + 11 > 21:
@@ -133,10 +158,8 @@ class Hand:
             self.hand_status = "BUSTED"
 
         if len(card_rank_list) == 2:
-            if card_rank_list[0] == 'A' or card_rank_list[1] == 'A':
-                if card_rank_list[0] in ["J", "Q", "K", '10']  or card_rank_list[1] in ["J", "Q", "K", '10']:
-                    self.hand_status = "BLACK_JACK"
-
+            if "A" in card_rank_list and self.hand_value == 21:
+                self.hand_status = "BLACK_JACK"
 
 
 class BasePlayer:
@@ -149,13 +172,8 @@ class BasePlayer:
     def display_hands(self) -> None:
         print(f"{self.hands}")
 
-class Player(BasePlayer):
-    def __init__(self, score: int = 100) -> None:
-        super().__init__()
-        self.score = score
-
-    def display_hands(self) -> None:
-        print(f"Player :{self.hands}")
+    def hit_hand(self, hand: Hand, card) -> None:
+        hand.add_card(card)
 
     def split_hand(self, hand: Hand) -> None:
         if hand.cards[0].rank == hand.cards[1].rank and self.score > hand.bid:
@@ -177,11 +195,25 @@ class Player(BasePlayer):
             print("You can't double down hand!")
 
 
+class Player(BasePlayer):
+    def __init__(self, score: int = 100) -> None:
+        super().__init__()
+        self.score = score
+
+    def display_hands(self) -> None:
+        print(f"Player :{self.hands}")
+
+    def __str__(self) -> str:
+        return f"Score :{self.score}, Hands :{self.hands}"
+
+    def __repr__(self):
+        return str(self)
+
+
 class House(BasePlayer):
 
     def display_hand_partial(self):
         print(f"House :{[self.hands[0].cards[0], '?']}")
-
 
 
 class Game:
@@ -243,6 +275,12 @@ class Game:
                     hand.add_card(self.deck.get_card())
             self.house.hands[0].add_card(self.deck.get_card())
 
+    def house_play_hand(self):
+        house = self.house
+        hand = self.house.hands[0]
+        while hand.hand_value <= 16:
+            house.hit_hand(hand, self.deck.get_card())
+
     def display_round(self):
         self.house.display_hand_partial()
         for player in self.players:
@@ -252,7 +290,6 @@ class Game:
         self.house.display_hand()
         for player in self.players:
             player.display_hands()
-
 
     def play_round(self):
         self.round_setup()
@@ -266,20 +303,21 @@ class Game:
                 while True:
                     if TURN_STATUS == "PLAYING":
                         print(f"House: {self.house.hands[0].get_partial_hand_str()}")
-                        # print(f"Player: {hand.get_hand_str()}")
                         print(f"Player: {hand.cards}")
                         print(f"What will player {player_index + 1} do?\n1) Hit\n2) Stand\n3) Double down\n4) Split")
                         move = input("Your move: ")
                         if move == "1":
-                            player.hands[0].add_card(self.deck.get_card())
-                            if player.hands[0].hand_value > 21:
-                                print("You hand is have busted!")
+                            player.hit_hand(hand, self.deck.get_card())
+                            if hand.is_busted():
+                                print("You hand is busted!")
                                 player.display_hand()
                                 TURN_STATUS = "STANDING"
                         if move == "2":
                             TURN_STATUS = "STANDING"
                         if move == "3":
                             player.dobule_down_hand(hand, self.deck.get_card())
+                            if hand.is_busted():
+                                print("You hand is busted!")
                             TURN_STATUS = "STANDING"
                         if move == "4":
                             player.split_hand(hand)
@@ -287,6 +325,9 @@ class Game:
                         print("Your turn ended")
                         break
                 hand_index += 1
+        self.house_play_hand()
         print("\n\n\n")
         self.end_round()
         self.display_round_end()
+        for player in self.players:
+            print(player)
