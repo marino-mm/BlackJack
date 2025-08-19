@@ -258,7 +258,7 @@ class Game:
                 elif house_hand.is_busted():
                     player.score += hand.bid * 2
                     if hand.is_black_jack():
-                        player.score += round(hand.bid * 0.5, 0)
+                        player.score += int(round(hand.bid * 0.5, 0))
                 else:
                     if hand.hand_value == house_hand.hand_value:
                         player.score += hand.bid
