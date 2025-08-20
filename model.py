@@ -95,7 +95,7 @@ class Deck:
             CardSuit.CLUBS,
             CardSuit.SPADES,
         ]
-        ranks = list(range(2, 11)) + ["A", "J", "Q", "K"]
+        ranks = list(map(str, range(2, 11))) + ["A", "J", "Q", "K"]
         for suit in suits:
             for rank in ranks:
                 card_deck.append(Card(suit, rank))
@@ -228,7 +228,7 @@ class Game:
     def round_setup(self) -> None:
         for player in self.players:
             hand_numb = input("Hand number: ")
-            while not hand_numb.isnumeric():
+            while not hand_numb.isnumeric() or int(hand_numb) > 4:
                 print("Invalid Hand Number, try again.")
 
             for hand_index, _ in enumerate(range(int(hand_numb))):
