@@ -253,7 +253,7 @@ class Game:
         house_hand = self.house.hands[0]
         for player in self.players:
             for hand in player.hands:
-                if hand.is_busted() and house_hand.is_black_jack():
+                if hand.is_busted() and house_hand.is_busted():
                     player.score += hand.bid
                 elif house_hand.is_busted():
                     player.score += hand.bid * 2
@@ -264,9 +264,10 @@ class Game:
                         player.score += hand.bid
                     elif hand.hand_value > house_hand.hand_value:
                         player.score += hand.bid * 2
+                        if hand.is_black_jack():
+                            player.score += int(round(hand.bid * 0.5, 0))
                     else:
-                        pass
-
+                        pass    
     def deal_to_all_hands(self):
 
         for _ in range(2):
