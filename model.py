@@ -1,3 +1,4 @@
+from abc import ABC
 from enum import StrEnum
 import random
 from typing import List
@@ -162,7 +163,7 @@ class Hand:
                 self.hand_status = "BLACK_JACK"
 
 
-class BasePlayer:
+class BasePlayer(ABC):
     def __init__(self) -> None:
         self.hands: list[Hand] = []
 
@@ -267,7 +268,8 @@ class Game:
                         if hand.is_black_jack():
                             player.score += int(round(hand.bid * 0.5, 0))
                     else:
-                        pass    
+                        pass
+
     def deal_to_all_hands(self):
 
         for _ in range(2):
