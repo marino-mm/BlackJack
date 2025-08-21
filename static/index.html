@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <h1>Hi this is a static file.</h1>
+</body>
+<p id="card"></p>
+<button onclick="get_card()">Get Card</button>
+<button onclick="shuffle_deck()">Shuffle deck</button>
+<script>
+    async function get_card() {
+        try {
+            let response = await fetch("/deck/get_card");
+            if (!response.ok) {
+                throw new Error("Network response was not ok");
+            }
+            let data = await response.json();
+            document.getElementById("card").innerText = data.card || "No card returned.";
+        } catch (error) {
+            console.error("Fetch error:", error);
+            document.getElementById("card").innerText = "Error fetching card.";
+        }
+    }
+    async function shuffle_deck() {
+        try {
+            let response = await fetch("/deck/generate");
+            if (!response.ok) {
+                throw new Error("Network response was not ok");
+            }
+        } catch (error) {
+            console.error("Fetch error:", error);
+            document.getElementById("card").innerText = "Error fetching card.";
+        }
+    }
+</script>
+
+</html>
