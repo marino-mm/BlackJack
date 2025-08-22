@@ -14,9 +14,9 @@ async def get_deck():
     if not deck:
         deck = Deck()
     else:
-        deck.shuffle()
+        deck.reset_cards()
 
-    return {"message": "Deck created" if not deck else "Deck shuffled"}
+    return {"message": "Deck created" if not deck else "Deck shuffled", "deck": list(map(str, deck.card_deck)) }
 
 
 @app.get("/deck/get_card")
@@ -25,7 +25,7 @@ async def get_card():
     if not deck:
         deck = Deck()
     card = deck.get_card()
-    return {"card": str(card)}
+    return {"card": str(card), "deck": list(map(str, deck.card_deck)) }
 
 
 app.mount("/", StaticFiles(directory="static", html=True), name="static")

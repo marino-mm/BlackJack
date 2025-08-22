@@ -86,6 +86,7 @@ class Deck:
 
     def reset_cards(self) -> None:
         self.card_deck = self.build_deck()
+        random.shuffle(self.card_deck)
 
     @staticmethod
     def build_deck() -> list[Card]:
