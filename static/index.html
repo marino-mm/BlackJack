@@ -8,37 +8,61 @@
 <body>
     <h1>Hi this is a static file.</h1>
 </body>
-<p id="deck"></p>
-<p id="card"></p>
-<button onclick="get_card()">Get Card</button>
-<button onclick="shuffle_deck()">Shuffle deck</button>
+<button onclick="connect_to_websocket()">Start Game</button>
+<form><input type="text" id="username" placeholder="Username"></form>
+<div>
+    <p id="house_hand"></p>
+    <p id="player_hand"></p>
+</div>
+<button onclick="send_event('hit')">Hit</button>
+<button onclick="send_event('stand')">Stand</button>
+<button onclick="send_event('doubleDown')">DoubleDown</button>
+<button onclick="send_event('split')">Split</button>
 <script>
-    async function get_card() {
-        try {
-            let response = await fetch("/deck/get_card");
-            if (!response.ok) {
-                throw new Error("Network response was not ok");
-            }
-            let data = await response.json();
-            document.getElementById("card").innerText = data.card || "No card returned.";
-            document.getElementById("deck").innerText = data.deck;
-        } catch (error) {
-            console.error("Fetch error:", error);
-            document.getElementById("card").innerText = "Error fetching card.";
-        }
+
+    const context = new Map();
+
+    async function send_event(messege) {
+        //console.log(messege)
+        let socket = context.get("socket")
+        let username = context.get("username")
+        socket.send(username +"'s move is " + messege)
     }
-    async function shuffle_deck() {
-        try {
-            let response = await fetch("/deck/generate");
-            if (!response.ok) {
-                throw new Error("Network response was not ok");
-            }
-            let data = await response.json();
-            document.getElementById("deck").innerText = data.deck;
-        } catch (error) {
-            console.error("Fetch error:", error);
-            document.getElementById("card").innerText = "Error fetching card.";
-        }
+    async function connect_to_websocket() {
+        await open_websocket()
+        let username = document.getElementById("username").value
+        let socket = context.get("socket")
+        context.set("username", username)
+        socket.send(username)
+    }
+
+    async function open_websocket() {
+        return new Promise((resolve, reject) => {
+            let socket = new WebSocket("ws://localhost:8000/ws");
+
+            socket.onopen = function(e) {
+                console.log("[open] Connection established");
+                context.set("socket", socket);
+                resolve(); // 🔁 This allows await to pause until the socket is open
+            };
+
+            socket.onmessage = function(event) {
+                console.log(`[message] Data received from server: ${event.data}`);
+            };
+
+            socket.onclose = function(event) {
+                if (event.wasClean) {
+                    console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+                } else {
+                    console.log('[close] Connection died');
+                }
+            };
+
+            socket.onerror = function(error) {
+                console.log(`[error]`);
+                reject(error); // 🔁 Ensures await catches the error
+            };
+        });
     }
 </script>
 
