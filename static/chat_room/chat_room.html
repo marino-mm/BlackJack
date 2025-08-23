@@ -3,23 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Chat room</title>
+    <link rel="stylesheet" href="/static/chat_room/style.css">
 </head>
 <body>
     <h1>Chat room</h1>
-    <div>
-        <button onclick="connect_to_websocket()">Start Game</button>
+    <header>
         <input type="text" id="username" placeholder="Username">
+        <button onclick="connect_to_websocket()">Connect</button>
+    </header>
+
+    <div id="chat-container">
+        <div id="message-window">
+            <ul id='messages'></ul>
+        </div>
+        <div id="user-list">
+            <h3>Users</h3>
+            <ul id="user_table"></ul>
+        </div>
     </div>
-    <div>
-        <button onclick="send_message()">Send message</button>
-        <input type="text" id="Message" placeholder="Message">
-    </div>
-    <div>
-        <ul id='messages'>
-        </ul>
+    <div id="message-input-container">
+        <input type="text" id="Message" placeholder="Type your message...">
+        <button onclick="send_message()">Send</button>
     </div>
 <script>
+
     const context = new Map();
     async function send_message() {
         let socket = context.get("socket")
@@ -30,7 +38,7 @@
             "message": message
         }
         socket.send(JSON.stringify(sending_message))
-    }x
+    }
 
     document.addEventListener("keypress", function(e) {
         if (e.key === "Enter") {
@@ -64,12 +72,18 @@
             };
 
             socket.onmessage = function(event) {
-                //console.log(`[message] Data received from server: ${event.data}`)
-                var ul = document.getElementById("messages");
-                var li = document.createElement("li");
-                li.appendChild(document.createTextNode(event.data));
-                ul.appendChild(li);
-            };
+                var data = JSON.parse(event.data)
+                if (data.message !== undefined){
+                    var ul = document.getElementById("messages");
+                    var li = document.createElement("li");
+                    li.appendChild(document.createTextNode(data.message));
+                    ul.appendChild(li);
+                }
+                if (data.user_list !== undefined){
+                    context.set('user_list', data.user_list)
+                    upldate_user_list()
+                }
+            }
 
             socket.onclose = function(event) {
                 if (event.wasClean) {
@@ -77,13 +91,30 @@
                 } else {
                     console.log('[close] Connection died');
                 }
+                context.set("socket", undefined);
             };
 
             socket.onerror = function(error) {
                 console.log(`[error]`);
                 reject(error); // 🔁 Ensures await catches the error
+                context.set("socket", undefined);
             };
         });
+    }
+
+    async function upldate_user_list(){
+        let userList = context.get('user_list')
+        let userListElement = document.getElementById("user_table")
+        userListElement.innerHTML = ''
+        userList
+            .sort()
+            .forEach(
+                user => {
+                    let li = document.createElement('li')
+                    li.appendChild(document.createTextNode(user))
+                    userListElement.appendChild(li)
+                }
+            )
     }
 </script>
 </body>

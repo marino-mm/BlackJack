@@ -3,7 +3,7 @@ import json
 from fastapi import FastAPI, WebSocket, Response
 from fastapi.staticfiles import StaticFiles
 from pyexpat.errors import messages
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, RedirectResponse
 from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()
@@ -27,11 +27,19 @@ class WebsocketManager:
             await connection.send_text(message)
 
 
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+
 @app.get("/")
-async def serve_index():
-    return FileResponse("static/chat_room.html")
+def serve_index():
+    return RedirectResponse("/chat", status_code=301)
+
+@app.get("/chat")
+def serve_chat():
+    return FileResponse("static/chat_room/chat_room.html")
 
 websocket_manager = WebsocketManager()
+user_list = []
+@app.websocket("/chat")
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket_manager.connect(websocket)
@@ -42,17 +50,25 @@ async def websocket_endpoint(websocket: WebSocket):
             json_data = json.loads(json_massage)
             if json_data.get('username'):
                 username = json_data.get('username')
+                user_list.append(username)
+                response_json = {
+                    "user_list" : user_list,
+                }
             if json_data.get('message'):
                 message = f"{username}: {json_data.get('message')}"
-                await websocket_manager.broadcast(message)
+                response_json = {
+                    "message": message,
+                }
+            await websocket_manager.broadcast(json.dumps(response_json))
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
-        await websocket_manager.broadcast(f"User {username} disconnected")
+        user_list.remove(username)
+        response_json = {
+            "user_list": user_list,
+        }
+        await websocket_manager.broadcast(json.dumps(response_json))
 
 @app.get("/heartbeat")
-async def heart_bet():
+def heart_bet():
     return Response()
 
-
-
-# app.mount("/", StaticFiles(directory="static", html=True), name="static")
