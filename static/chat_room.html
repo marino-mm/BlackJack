@@ -7,14 +7,13 @@
 </head>
 <body>
     <h1>Chat room</h1>
-</body>
     <div>
         <button onclick="connect_to_websocket()">Start Game</button>
-        <form><input type="text" id="username" placeholder="Username"></form>
+        <input type="text" id="username" placeholder="Username">
     </div>
     <div>
         <button onclick="send_message()">Send message</button>
-        <form><input type="text" id="Message" placeholder="Message"></form>
+        <input type="text" id="Message" placeholder="Message">
     </div>
     <div>
         <ul id='messages'>
@@ -26,14 +25,30 @@
         let socket = context.get("socket")
         let username = context.get("username")
         let message = document.getElementById("Message").value
-        socket.send(username +": " + message)
-    }
+        if (!message.trim()) return;
+        let sending_message = {
+            "message": message
+        }
+        socket.send(JSON.stringify(sending_message))
+    }x
+
+    document.addEventListener("keypress", function(e) {
+        if (e.key === "Enter") {
+            send_message();
+        }
+    });
+
     async function connect_to_websocket() {
-        await open_websocket()
-        let username = document.getElementById("username").value
-        let socket = context.get("socket")
-        context.set("username", username)
-        socket.send(username)
+        if (context.get("socket") === undefined){
+            await open_websocket()
+            let username = document.getElementById("username").value
+            let socket = context.get("socket")
+            context.set("username", username)
+            let sending_message = {
+                "username": username
+            }
+            socket.send(JSON.stringify(sending_message))
+        }
     }
     async function open_websocket() {
         return new Promise((resolve, reject) => {
@@ -71,4 +86,5 @@
         });
     }
 </script>
+</body>
 </html>

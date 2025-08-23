@@ -1,3 +1,5 @@
+import json
+
 from fastapi import FastAPI, WebSocket, Response
 from fastapi.staticfiles import StaticFiles
 from pyexpat.errors import messages
@@ -33,12 +35,16 @@ websocket_manager = WebsocketManager()
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket_manager.connect(websocket)
-    username = await websocket.receive_text()
-    # await websocket_manager.broadcast(f"New connection established. Username: {username}")
+    username = ''
     try:
         while True:
-            message = await websocket.receive_text()
-            await websocket_manager.broadcast(message)
+            json_massage = await websocket.receive_text()
+            json_data = json.loads(json_massage)
+            if json_data.get('username'):
+                username = json_data.get('username')
+            if json_data.get('message'):
+                message = f"{username}: {json_data.get('message')}"
+                await websocket_manager.broadcast(message)
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
         await websocket_manager.broadcast(f"User {username} disconnected")
