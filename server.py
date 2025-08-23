@@ -1,6 +1,7 @@
 from fastapi import FastAPI, WebSocket, Response
 from fastapi.staticfiles import StaticFiles
 from pyexpat.errors import messages
+from starlette.responses import FileResponse
 from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()
@@ -24,12 +25,16 @@ class WebsocketManager:
             await connection.send_text(message)
 
 
+@app.get("/")
+async def serve_index():
+    return FileResponse("static/chat_room.html")
+
 websocket_manager = WebsocketManager()
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket_manager.connect(websocket)
     username = await websocket.receive_text()
-    await websocket_manager.broadcast(f"New connection established. Username: {username}")
+    # await websocket_manager.broadcast(f"New connection established. Username: {username}")
     try:
         while True:
             message = await websocket.receive_text()
@@ -44,4 +49,4 @@ async def heart_bet():
 
 
 
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# app.mount("/", StaticFiles(directory="static", html=True), name="static")

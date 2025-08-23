@@ -6,27 +6,27 @@
     <title>Document</title>
 </head>
 <body>
-    <h1>Hi this is a static file.</h1>
+    <h1>Chat room</h1>
 </body>
-<button onclick="connect_to_websocket()">Start Game</button>
-<form><input type="text" id="username" placeholder="Username"></form>
-<div>
-    <p id="house_hand"></p>
-    <p id="player_hand"></p>
-</div>
-<button onclick="send_event('hit')">Hit</button>
-<button onclick="send_event('stand')">Stand</button>
-<button onclick="send_event('doubleDown')">DoubleDown</button>
-<button onclick="send_event('split')">Split</button>
+    <div>
+        <button onclick="connect_to_websocket()">Start Game</button>
+        <form><input type="text" id="username" placeholder="Username"></form>
+    </div>
+    <div>
+        <button onclick="send_message()">Send message</button>
+        <form><input type="text" id="Message" placeholder="Message"></form>
+    </div>
+    <div>
+        <ul id='messages'>
+        </ul>
+    </div>
 <script>
-
     const context = new Map();
-
-    async function send_event(messege) {
-        //console.log(messege)
+    async function send_message() {
         let socket = context.get("socket")
         let username = context.get("username")
-        socket.send(username +"'s move is " + messege)
+        let message = document.getElementById("Message").value
+        socket.send(username +": " + message)
     }
     async function connect_to_websocket() {
         await open_websocket()
@@ -49,7 +49,11 @@
             };
 
             socket.onmessage = function(event) {
-                console.log(`[message] Data received from server: ${event.data}`);
+                //console.log(`[message] Data received from server: ${event.data}`)
+                var ul = document.getElementById("messages");
+                var li = document.createElement("li");
+                li.appendChild(document.createTextNode(event.data));
+                ul.appendChild(li);
             };
 
             socket.onclose = function(event) {
