@@ -39,7 +39,7 @@ def serve_chat():
 
 websocket_manager = WebsocketManager()
 user_list = []
-@app.websocket("/chat")
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket_manager.connect(websocket)

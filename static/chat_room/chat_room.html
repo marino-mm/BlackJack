@@ -31,8 +31,8 @@
     const context = new Map();
     async function send_message() {
         let socket = context.get("socket")
-        let username = context.get("username")
         let message = document.getElementById("Message").value
+        document.getElementById("Message").value = ''
         if (!message.trim()) return;
         let sending_message = {
             "message": message
@@ -83,6 +83,7 @@
                     context.set('user_list', data.user_list)
                     upldate_user_list()
                 }
+                console.log(data)
             }
 
             socket.onclose = function(event) {
