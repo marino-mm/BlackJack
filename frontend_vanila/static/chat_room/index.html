@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat room</title>
-    <link rel="stylesheet" href="/static/chat_room/style.css">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <h1>Chat room</h1>
@@ -26,6 +26,7 @@
         <input type="text" id="Message" placeholder="Type your message...">
         <button onclick="send_message()">Send</button>
     </div>
+    <div id="cursors"></div>
 <script>
 
     const context = new Map();
@@ -43,6 +44,16 @@
     document.addEventListener("keypress", function(e) {
         if (e.key === "Enter") {
             send_message();
+        }
+    });
+
+    document.addEventListener("mousemove", function(e) {
+        if (context.get("socket") !== undefined && context.get("username") !== undefined){
+            const data = `${context.get("username")} ${e.x} ${e.y}`
+            const sending_message = {
+                "cursor": data
+            }
+            context.get("socket").send(JSON.stringify(sending_message))
         }
     });
 
@@ -72,16 +83,21 @@
             };
 
             socket.onmessage = function(event) {
-                var data = JSON.parse(event.data)
+                let data = JSON.parse(event.data)
                 if (data.message !== undefined){
-                    var ul = document.getElementById("messages");
-                    var li = document.createElement("li");
+                    let ul = document.getElementById("messages");
+                    let li = document.createElement("li");
                     li.appendChild(document.createTextNode(data.message));
                     ul.appendChild(li);
                 }
                 if (data.user_list !== undefined){
                     context.set('user_list', data.user_list)
                     upldate_user_list()
+                }
+                if (data.cursor !== undefined) {
+                    const cursorContainer = document.body;
+                    const cursorHTML = data.cursor;
+                    cursorContainer.innerHTML += cursorHTML;
                 }
                 console.log(data)
             }

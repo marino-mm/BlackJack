@@ -1,5 +1,5 @@
 import unittest
-from model import Hand, Card, CardSuit, Game
+from backend.model import Hand, Card, CardSuit, Game
 
 class TestHand(unittest.TestCase):
 
