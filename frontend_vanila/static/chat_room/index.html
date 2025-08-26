@@ -95,9 +95,16 @@
                     upldate_user_list()
                 }
                 if (data.cursor !== undefined) {
-                    const cursorContainer = document.body;
-                    const cursorHTML = data.cursor;
-                    cursorContainer.innerHTML += cursorHTML;
+                    const user_cursor = document.getElementById(data.cursor_username)
+                    if (user_cursor !== null){
+                        user_cursor.innerHTML = data.cursor
+                        console.log(data.cursor)
+                    }
+                    else {
+                        const cursorContainer = document.body;
+                        const cursorHTML = data.cursor;
+                        cursorContainer.innerHTML += cursorHTML;
+                    }
                 }
                 console.log(data)
             }
