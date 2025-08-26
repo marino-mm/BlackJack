@@ -13,7 +13,10 @@ app = FastAPI()
 BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIST = BASE_DIR / "backend"
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
-# mimetypes.add_type("application/javascript", ".js", strict=True)
+#mimetypes are needed to be set because of Windows registry
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 
 class UserConnection:
