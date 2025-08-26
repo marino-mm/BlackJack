@@ -86,7 +86,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 cursor_name = data[0]
                 x = int(data[1])
                 y = int(data[2])
-                html_div = f'<div id="{cursor_name}"style="width: 10px; height: 10px; background-color: blue; position: absolute; top: {y}px; left: {x}px;">cursor_name</div>'
+                html_div = f'<div id="{cursor_name}"style="width: 10px; height: 10px; background-color: blue; position: absolute; top: {y}px; left: {x}px;">{cursor_name}</div>'
                 response_json = {
                         "cursor": html_div,
                         "cursor_username": cursor_name
