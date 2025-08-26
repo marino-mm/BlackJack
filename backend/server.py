@@ -1,4 +1,5 @@
 import json
+import mimetypes
 from pathlib import Path
 from typing import Set
 
@@ -9,13 +10,11 @@ from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # React dev server
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+BASE_DIR = Path(__file__).resolve().parent.parent
+BACKEND_DIST = BASE_DIR / "backend"
+FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+# mimetypes.add_type("application/javascript", ".js", strict=True)
+
 
 class UserConnection:
     def __init__(self, websocket: WebSocket):
@@ -33,8 +32,6 @@ class UserConnection:
     
     def __hash__(self):
         return hash(self.username)
-
-        
 
 class WebsocketManager:
     def __init__(self) -> None:
@@ -102,6 +99,5 @@ async def websocket_endpoint(websocket: WebSocket):
 def heart_bet():
     return Response()
 
-static_dir = Path(__file__).resolve().parent.parent / "frontend_vanila" / "static" / "chat_room"
-# static_dir = Path(__file__).resolve().parent.parent / "frontend"
-app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="static")
