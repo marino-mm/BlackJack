@@ -22,18 +22,19 @@ class UserConnection:
     def __init__(self, websocket: WebSocket):
         self.connection = websocket
         self.username = None
-        
+
     async def create(self):
         while not self.username:
             message_dict = await self.connection.receive_json()
             if message_dict.get('username'):
                 self.username = message_dict.get('username')
-    
+
     def __eq__(self, value: object) -> bool:
         return self.username == value.username
-    
+
     def __hash__(self):
         return hash(self.username)
+
 
 class WebsocketManager:
     def __init__(self) -> None:
@@ -61,8 +62,10 @@ class WebsocketManager:
             if user_connection != my_connection:
                 await user_connection.connection.send_text(message)
 
+
 websocket_manager = WebsocketManager()
 user_list = []
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -70,7 +73,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         response_json = None
         user_list.append(user_connection.username)
-        response_json = {"user_list" : user_list}
+        response_json = {"user_list": user_list}
         await websocket_manager.broadcast(json.dumps(response_json))
         while True:
             json_data = await user_connection.connection.receive_json()
@@ -87,15 +90,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 y = int(data[2])
                 html_div = f'<div id="{cursor_name}"style="width: 10px; height: 10px; background-color: blue; position: absolute; top: {y}px; left: {x}px;">{cursor_name}</div>'
                 response_json = {
-                        "cursor": html_div,
-                        "cursor_username": cursor_name
-                    }
+                    "cursor": html_div,
+                    "cursor_username": cursor_name
+                }
                 await websocket_manager.broadcast_everyone_except_me(json.dumps(response_json), user_connection)
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
         user_list.remove(user_connection.username)
         response_json = {"user_list": user_list}
         await websocket_manager.broadcast(json.dumps(response_json))
+
 
 @app.get("/heartbeat")
 def heart_bet():

@@ -1,43 +1,47 @@
-import { useState } from 'react'
+import {useState} from 'react'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+    const [count, setCount] = useState(0)
 
-  return (
-    <di>
-      <h1>CHAT ROOM</h1>
-      <Chat />
-    </di>
+    return (
+        <di>
+            <h1>CHAT ROOM</h1>
+            <Chat/>
+        </di>
 
-  )
-}export default App
+    )
+}
+
+export default App
 
 function ChatMessage(props) {
-  return(
-    <p>{props.username}: {props.message}</p>
-  )
+    return (
+        <p>{props.username}: {props.message}</p>
+    )
 }
 
-function Chat(){
-  return(
-    <div>
-      <ChatBody />
-      <ChatFooter />
-    </div>
-  )
+function Chat() {
+    return (
+        <div>
+            <ChatBody/>
+            <ChatFooter/>
+        </div>
+    )
 }
-function ChatBody(){
-  return(
-    <div></div>
-  )
+
+function ChatBody() {
+    const chatMassages = []
+    return (
+        <div></div>
+    )
 }
 
 function ChatFooter() {
-  return (
-    <div>
-      <input type='textarea'></input>
-      <button>Send</button>
-    </div>
-  )
+    return (
+        <div>
+            <input type='textarea'></input>
+            <button>Send</button>
+        </div>
+    )
 }
