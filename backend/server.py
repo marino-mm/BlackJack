@@ -5,7 +5,6 @@ from typing import Set
 
 from fastapi import FastAPI, WebSocket, Response
 from fastapi.staticfiles import StaticFiles
-from starlette.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
 app = FastAPI()
@@ -13,7 +12,7 @@ app = FastAPI()
 BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIST = BASE_DIR / "backend"
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
-#mimetypes are needed to be set because of Windows registry
+# mimetypes are needed to be set because of Windows registry
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
 mimetypes.add_type("image/svg+xml", ".svg")
@@ -103,4 +102,4 @@ def heart_bet():
     return Response()
 
 
-app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True), name="static")
+app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
