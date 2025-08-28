@@ -77,7 +77,10 @@ class WebsocketManager:
         user_list = []
         for user_connection in self.active_connections:
             user_list.append(user_connection.username)
-        response_json = {"user_list": user_list}
+        response_json = {
+            "type": "user_list",
+            "user_list": user_list
+        }
         try:
             for user_connection in self.active_connections:
                 await user_connection.connection.send_text(json.dumps(response_json))
@@ -93,17 +96,19 @@ user_list = []
 async def websocket_endpoint(websocket: WebSocket):
     try:
         user_connection = await websocket_manager.connect(websocket)
-        response_json = None
         while True:
             json_data = await user_connection.connection.receive_json()
             if json_data.get('message'):
-                message = f"{user_connection.username}: {json_data.get('message')}"
+                # message = f"{user_connection.username}: {json_data.get('message')}"
                 response_json = {
-                    "message": message,
+                    "type": "message",
+                    "user": user_connection.username,
+                    "message": json_data.get('message'),
                 }
                 await websocket_manager.broadcast(json.dumps(response_json))
             if json_data.get('cursor'):
                 response_json = {
+                    "type": "cursor",
                     "cursor": json_data.get('cursor'),
                 }
                 await websocket_manager.broadcast_everyone_except_me(json.dumps(response_json), user_connection)
