@@ -28,7 +28,7 @@ class UserConnection:
         while not self.username:
             message_dict = await self.connection.receive_json()
             if message_dict.get('username'):
-                self.username = message_dict.get('username')
+                self.username = message_dict.get('username').replace(' ', '_')
 
     def __eq__(self, value: object) -> bool:
         return self.username == value.username
@@ -46,10 +46,12 @@ class WebsocketManager:
         user_connection = UserConnection(websocket)
         await user_connection.create()
         self.active_connections.add(user_connection)
+        await self.broadcast_user_list()
         return user_connection
 
-    def disconnect(self, user_connection):
+    async def disconnect(self, user_connection):
         self.active_connections.discard(user_connection)
+        await self.broadcast_user_list()
 
     async def send_personal_message(self, message: str, user_connection: UserConnection):
         await user_connection.connection.send_text(message)
@@ -58,16 +60,27 @@ class WebsocketManager:
         try:
             for user_connection in self.active_connections:
                 await user_connection.connection.send_text(message)
-        except WebSocketDisconnect:
-            self.disconnect(user_connection)
+        except Exception:
+            await self.disconnect(user_connection)
 
     async def broadcast_everyone_except_me(self, message: str, my_connection: UserConnection):
         try:
             for user_connection in self.active_connections:
                 if user_connection != my_connection:
                     await user_connection.connection.send_text(message)
-        except WebSocketDisconnect:
-            self.disconnect(user_connection)
+        except Exception:
+            await self.disconnect(user_connection)
+    
+    async def broadcast_user_list(self):
+        user_list = []
+        for user_connection in self.active_connections:
+            user_list.append(user_connection.username)
+        response_json = {"user_list": user_list}
+        try:
+            for user_connection in self.active_connections:
+                await user_connection.connection.send_text(json.dumps(response_json))
+        except Exception:
+            await self.disconnect(user_connection)
 
 
 websocket_manager = WebsocketManager()
@@ -79,9 +92,9 @@ async def websocket_endpoint(websocket: WebSocket):
     user_connection = await websocket_manager.connect(websocket)
     try:
         response_json = None
-        user_list.append(user_connection.username)
-        response_json = {"user_list": user_list}
-        await websocket_manager.broadcast(json.dumps(response_json))
+        # user_list.append(user_connection.username)
+        # response_json = {"user_list": user_list}
+        # await websocket_manager.broadcast(json.dumps(response_json))
         while True:
             json_data = await user_connection.connection.receive_json()
             if json_data.get('message'):
@@ -96,10 +109,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 }
                 await websocket_manager.broadcast_everyone_except_me(json.dumps(response_json), user_connection)
     except WebSocketDisconnect:
-        websocket_manager.disconnect(websocket)
-        user_list.remove(user_connection.username)
-        response_json = {"user_list": user_list}
-        await websocket_manager.broadcast(json.dumps(response_json))
+        await websocket_manager.disconnect(websocket)
 
 
 @app.get("/heartbeat")

@@ -94,6 +94,8 @@
                 if (data.user_list !== undefined){
                     context.set('user_list', data.user_list)
                     upldate_user_list()
+                    remove_cursor(data.user_list)
+                    render_cursors()
                 }
                 if (data.cursor !== undefined) {
                     add_or_update_cursor(data.cursor)
@@ -155,6 +157,13 @@
         parent_element.replaceChildren();
         for(const [_, value] of cursors){
             parent_element.appendChild(value)
+        }
+    }
+    async function remove_cursor(user_list){
+        for(const [key, _] of cursors){
+            if (!user_list.includes(key)){
+                cursors.delete(key)
+            }
         }
     }
 </script>
