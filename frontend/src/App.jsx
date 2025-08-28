@@ -3,13 +3,12 @@ import './App.css'
 
 function App() {
     const [count, setCount] = useState(0)
-
     return (
         <di>
             <h1>CHAT ROOM</h1>
             <Chat/>
+            <VanillaButton/>
         </di>
-
     )
 }
 
@@ -43,5 +42,15 @@ function ChatFooter() {
             <input type='textarea'></input>
             <button>Send</button>
         </div>
+    )
+}
+
+function VanillaButton(){
+    function rederect_to_vanilla(){
+        window.location.href = "/vanilla_js/"
+    }
+
+    return (
+        <button onClick={rederect_to_vanilla}>Vanilla_Chatroom</button>
     )
 }

@@ -12,6 +12,7 @@ app = FastAPI()
 BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIST = BASE_DIR / "backend"
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
+FRONTEND_VANILLA_DIST = BASE_DIR / "frontend_vanila" /"static"/ "chat_room"
 # mimetypes are needed to be set because of Windows registry
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
@@ -54,13 +55,19 @@ class WebsocketManager:
         await user_connection.connection.send_text(message)
 
     async def broadcast(self, message: str):
-        for user_connection in self.active_connections:
-            await user_connection.connection.send_text(message)
+        try:
+            for user_connection in self.active_connections:
+                await user_connection.connection.send_text(message)
+        except WebSocketDisconnect:
+            self.disconnect(user_connection)
 
     async def broadcast_everyone_except_me(self, message: str, my_connection: UserConnection):
-        for user_connection in self.active_connections:
-            if user_connection != my_connection:
-                await user_connection.connection.send_text(message)
+        try:
+            for user_connection in self.active_connections:
+                if user_connection != my_connection:
+                    await user_connection.connection.send_text(message)
+        except WebSocketDisconnect:
+            self.disconnect(user_connection)
 
 
 websocket_manager = WebsocketManager()
@@ -84,14 +91,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 }
                 await websocket_manager.broadcast(json.dumps(response_json))
             if json_data.get('cursor'):
-                data = str(json_data.get('cursor')).split(' ')
-                cursor_name = data[0]
-                x = int(data[1])
-                y = int(data[2])
-                html_div = f'<div id="{cursor_name}"style="width: 10px; height: 10px; background-color: blue; position: absolute; top: {y}px; left: {x}px;">{cursor_name}</div>'
                 response_json = {
-                    "cursor": html_div,
-                    "cursor_username": cursor_name
+                    "cursor": json_data.get('cursor'),
                 }
                 await websocket_manager.broadcast_everyone_except_me(json.dumps(response_json), user_connection)
     except WebSocketDisconnect:
@@ -105,5 +106,7 @@ async def websocket_endpoint(websocket: WebSocket):
 def heart_bet():
     return Response()
 
+# app.mount("/vanilla_js", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="vanilla_static")
+# app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
+app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="static")
 
-app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")

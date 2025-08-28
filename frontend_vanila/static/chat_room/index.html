@@ -30,6 +30,7 @@
 <script>
 
     const context = new Map();
+    const cursors = new Map();
     async function send_message() {
         let socket = context.get("socket")
         let message = document.getElementById("Message").value
@@ -95,16 +96,8 @@
                     upldate_user_list()
                 }
                 if (data.cursor !== undefined) {
-                    const user_cursor = document.getElementById(data.cursor_username)
-                    if (user_cursor !== null){
-                        user_cursor.innerHTML = data.cursor
-                        console.log(data.cursor)
-                    }
-                    else {
-                        const cursorContainer = document.body;
-                        const cursorHTML = data.cursor;
-                        cursorContainer.innerHTML += cursorHTML;
-                    }
+                    add_or_update_cursor(data.cursor)
+                    render_cursors()
                 }
                 console.log(data)
             }
@@ -139,6 +132,30 @@
                     userListElement.appendChild(li)
                 }
             )
+    }
+
+    async function add_or_update_cursor(inbound_cursor){
+        const [cursor_name, cursor_x, cursor_y] = inbound_cursor.split(" ");
+        let cursor_div = cursors.get(cursor_name);
+
+        if (cursor_div === undefined){
+            cursor_element = document.createElement("div")
+            cursor_element_content = document.createTextNode(cursor_name)
+            cursor_element.appendChild(cursor_element_content)
+            cursor_element.style.position = "absolute"
+            cursor_element.style.pointerEvents = "none"
+            cursors.set(cursor_name, cursor_element)
+            cursor_div = cursor_element
+        }
+        cursor_div.style.left = `${cursor_x}px`;
+        cursor_div.style.top = `${cursor_y}px`;
+    }
+    async function render_cursors(){
+        parent_element = document.getElementById("cursors")
+        parent_element.replaceChildren();
+        for(const [_, value] of cursors){
+            parent_element.appendChild(value)
+        }
     }
 </script>
 </body>
