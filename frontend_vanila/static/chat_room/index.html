@@ -61,7 +61,7 @@
     async function connect_to_websocket() {
         if (context.get("socket") === undefined){
             await open_websocket()
-            let username = document.getElementById("username").value.replaceAll(" ", "_")
+            let username = document.getElementById("username").value
             let socket = context.get("socket")
             context.set("username", username)
             let sending_message = {
@@ -137,7 +137,11 @@
     }
 
     async function add_or_update_cursor(inbound_cursor){
-        const [cursor_name, cursor_x, cursor_y] = inbound_cursor.split(" ");
+        const cursorList = inbound_cursor.split(" ");
+        const cursor_y = cursorList[cursorList.length - 1];
+        const cursor_x = cursorList[cursorList.length - 2];
+        const cursor_name = cursorList.slice(0, -2).join(" ");
+
         let cursor_div = cursors.get(cursor_name);
 
         if (cursor_div === undefined){

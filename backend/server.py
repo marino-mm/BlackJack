@@ -28,10 +28,12 @@ class UserConnection:
         while not self.username:
             message_dict = await self.connection.receive_json()
             if message_dict.get('username'):
-                self.username = message_dict.get('username').replace(' ', '_')
+                self.username = message_dict.get('username')
 
     def __eq__(self, value: object) -> bool:
-        return self.username == value.username
+        if isinstance(value, UserConnection):
+            return self.username == value.username
+        return False
 
     def __hash__(self):
         return hash(self.username)
@@ -92,9 +94,6 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         user_connection = await websocket_manager.connect(websocket)
         response_json = None
-        # user_list.append(user_connection.username)
-        # response_json = {"user_list": user_list}
-        # await websocket_manager.broadcast(json.dumps(response_json))
         while True:
             json_data = await user_connection.connection.receive_json()
             if json_data.get('message'):
