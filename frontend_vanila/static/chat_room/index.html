@@ -61,7 +61,7 @@
     async function connect_to_websocket() {
         if (context.get("socket") === undefined){
             await open_websocket()
-            let username = document.getElementById("username").value
+            let username = document.getElementById("username").value.replaceAll(" ", "_")
             let socket = context.get("socket")
             context.set("username", username)
             let sending_message = {
