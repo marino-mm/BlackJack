@@ -89,8 +89,8 @@ user_list = []
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    user_connection = await websocket_manager.connect(websocket)
     try:
+        user_connection = await websocket_manager.connect(websocket)
         response_json = None
         # user_list.append(user_connection.username)
         # response_json = {"user_list": user_list}
