@@ -88,7 +88,7 @@
                 if (data.message !== undefined){
                     let ul = document.getElementById("messages");
                     let li = document.createElement("li");
-                    li.appendChild(document.createTextNode(data.message));
+                    li.appendChild(document.createTextNode(`${data.user}: ${data.message}`));
                     ul.appendChild(li);
                 }
                 if (data.user_list !== undefined){
