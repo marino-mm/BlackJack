@@ -15,20 +15,7 @@ function App() {
 export default App
 
 function Chat() {
-    const [chatMessages, setMessages] = useState([
-        {
-            "user": "a",
-            "message": "bok",
-        },
-        {
-            "user": "b",
-            "message": "dawdawda",
-        },
-        {
-            "user": "a",
-            "message": "aaaaaaaaaaaaa",
-        },
-    ])
+    const [chatMessages, setMessages] = useState([])
 
     return (
         <div>
@@ -41,9 +28,15 @@ function Chat() {
 function ChatBody({chatMessages}) {
      return (
         <Fragment>
-            {chatMessages.map(message => <div>{message.user}: {message.message}</div>)}
+            {chatMessages.map(message => <ChatMessage {...message}></ChatMessage>)}
         </Fragment>
     )
+}
+
+function ChatMessage(props) {
+    const user = props.user
+    const message = props.message
+    return <div>{user}: {message}</div>
 }
 
 function ChatFooter({onSend}) {
