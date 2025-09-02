@@ -1,35 +1,38 @@
-import {Fragment, use, useState} from "react";
+import {Fragment, useState, useContext} from "react";
 import './ChatRoom.css'
+import CurrentUserContext from "./ChatRoomContext.jsx";
 
 function Chat({username}) {
     const [chatMessages, setMessages] = useState([])
     return (
-        <div>
-            <ChatBody username={username} chatMessages={chatMessages}/>
-            <ChatFooter username={username} onSend={(input) => setMessages([...chatMessages, input])}/>
-        </div>
+        <CurrentUserContext value={username}>
+            <div>
+                <ChatBody chatMessages={chatMessages}/>
+                <ChatFooter onSend={(input) => setMessages([...chatMessages, input])}/>
+            </div>
+        </CurrentUserContext>
     )
 }
 export default Chat
 
-function ChatBody({username, chatMessages}) {
+function ChatBody({chatMessages}) {
      return (
         <Fragment>
-            {chatMessages.map(message => <ChatMessage currentUser={username} message={message}></ChatMessage>)}
+            {chatMessages.map(message => <ChatMessage message={message}></ChatMessage>)}
         </Fragment>
     )
 }
 
-function ChatMessage({ currentUser, message }) {
-    const messageClassName = currentUser === message.user ? ("myMessage") : ("foreignMessage")
+function ChatMessage({ message }) {
+    const messageClassName = useContext(CurrentUserContext) === message.user ? ("myMessage") : ("foreignMessage")
     return <div className={messageClassName}>{message.user}: {message.message}</div>;
 }
 
-function ChatFooter({username, onSend}) {
+function ChatFooter({onSend}) {
     const [inputMessage, setInputMessage] = useState('');
 
     const handleSend = () => {
-        onSend({ user: username, message: inputMessage })
+        onSend({ user: useContext(CurrentUserContext), message: inputMessage })
         setInputMessage('')
     }
     return (
