@@ -1,6 +1,6 @@
 import {Fragment, useState, useContext} from "react";
 import './ChatRoom.css'
-import CurrentUserContext from "./ChatRoomContext.jsx";
+import {CurrentUserContext} from "../context/ChatRoomContext.jsx";
 
 function Chat({username}) {
     const [chatMessages, setMessages] = useState([])
@@ -24,15 +24,16 @@ function ChatBody({chatMessages}) {
 }
 
 function ChatMessage({ message }) {
-    const messageClassName = useContext(CurrentUserContext) === message.user ? ("myMessage") : ("foreignMessage")
+    const currentUser = useContext(CurrentUserContext)
+    const messageClassName = currentUser  === message.user ? ("myMessage") : ("foreignMessage")
     return <div className={messageClassName}>{message.user}: {message.message}</div>;
 }
 
 function ChatFooter({onSend}) {
     const [inputMessage, setInputMessage] = useState('');
-
+    const currentUser = useContext(CurrentUserContext)
     const handleSend = () => {
-        onSend({ user: useContext(CurrentUserContext), message: inputMessage })
+        onSend({ user: currentUser, message: inputMessage })
         setInputMessage('')
     }
     return (
