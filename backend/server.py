@@ -122,5 +122,6 @@ def heart_bet():
 
 # app.mount("/vanilla_js", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="vanilla_static")
 # app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
+app.mount("/react", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
 app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="static")
 
