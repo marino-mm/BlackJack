@@ -21,7 +21,7 @@ export default App
 
 function VanillaButton(){
     function redirect_to_vanilla(){
-        window.location.href = "/vanilla_js/"
+        window.location.href = "/"
     }
     return (
         <button onClick={redirect_to_vanilla}>Vanilla_Chatroom</button>
