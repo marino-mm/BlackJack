@@ -7,6 +7,8 @@ from fastapi import FastAPI, WebSocket, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
 
+from backend.subapp.main import game_app
+
 app = FastAPI()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -119,6 +121,8 @@ async def websocket_endpoint(websocket: WebSocket):
 @app.get("/heartbeat")
 def heart_bet():
     return Response()
+
+app.mount("/game", game_app)
 
 # app.mount("/vanilla_js", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="vanilla_static")
 # app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")

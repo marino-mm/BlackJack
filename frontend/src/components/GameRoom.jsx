@@ -1,33 +1,95 @@
-import {useContext, useState} from 'react'
-import {yourTurnContext} from "../context/GameRoom.jsx";
+import {Fragment, useContext, useEffect, useState} from 'react'
+import useWebSocket, {ReadyState} from "react-use-websocket";
+
 
 function GameRoom() {
-    const [house, setHouse] = useState({name: "House", cards: []})
-    const [tableSlots, settableSlots] = useState(new Array(5).fill(null))
+    const [house, setHouse] = useState({
+        name: "House",
+        hands: [[{rank: 'A', suit: '♠'}, {rank: 'K', suit: '♠'}, {rank: 'K', suit: '♠'}]]
+    })
+    const [tableSlots, settableSlots] = useState(new Array(5).fill({name: "Empty", hands: [[]]}))
+
+    const dev = true
+    let wsUrl = null
+    if (dev){
+        wsUrl = "http://localhost:8000/game/ws";
+    }
+    else{
+        const loc = window.location;
+        const wsProtocol = loc.protocol === "https:" ? "wss" : "ws";
+        wsUrl = `${wsProtocol}://${loc.host}/ws`;
+    }
+
+    const { sendJsonMessage, readyState, lastJsonMessage } = useWebSocket(wsUrl)
+    const [hasSentInitial, setHasSentInitial] = useState(false)
+
+    useEffect(() => {
+        if (readyState === ReadyState.OPEN && !hasSentInitial) {
+            sendJsonMessage({"username": "test"})
+            setHasSentInitial(true);
+        }
+    }, [readyState, hasSentInitial, sendJsonMessage]);
+
+    useEffect(() => {
+        if (lastJsonMessage) {
+            console.log(lastJsonMessage)
+        }
+    }, [lastJsonMessage])
+
+    const hit = () =>{
+        const message = {"action": "hit"}
+        sendJsonMessage(message)
+        //console.log("hit")
+    }
 
     return (
         <div>
             <div className="grid w-full grid-cols-5 grid-rows-2 border-4 border-blue-400 gap-4 p-5">
-                <div className="col-span-5 border-4 border-red-500 min-h-10">
-                    <PlayerHand player={house}/>
+                <div className="col-span-5 flex flex-col border-4 border-red-500 min-h-10 justify-center items-center">
+                    <PlayerHands player={house}/>
                 </div>
                 {tableSlots.map((slot, index) => (
-                    <div key={index}
-                         className="h-full border-4 border-green-300 flex items-center justify-center">{index}</div>))}
+                    <PlayerHands key={index}
+                                 className="h-full border-4 border-green-300 flex items-center justify-center"
+                                 player={slot}/>))}
 
             </div>
-            <ActionBar></ActionBar>
+            <ActionBar hit={hit}></ActionBar>
         </div>
     )
 }
 
 export default GameRoom;
 
-function PlayerHand({player}) {
+function PlayerHands({player}) {
     return (
-        <div>
-            <h3>{player.name}</h3>
-            <p>{player.cards}</p>
+        <div className="grid grid-cols-1 border-purple-700 border-1 m-2">
+            <h3 className="font-bold text-lg">{player.name}</h3>
+            <div className="grid grid-cols-1 gap-2 justify-center p-1">
+                {player.hands.map((hand, index) => (
+                    <Hand key={index} hand={hand}/>
+                ))}
+            </div>
+        </div>
+    )
+}
+
+function Hand({hand}) {
+    return (
+        <div className="border-1 border-b-amber-950 flex flex-wrap m-1">
+            {hand.map((card, index) =>
+                <Card key={index} rank={card.rank} suit={card.suit}/>
+            )}
+        </div>
+    )
+}
+
+function Card({rank, suit}) {
+
+    return (
+        <div className="flex items-center gap-1 border border-b-rose-200 px-2 py-1 rounded w-max text-sm m-1">
+            <p>{rank}</p>
+            <p>{suit}</p>
         </div>
     )
 }
@@ -38,9 +100,9 @@ function ActionBar({hit, stand, doubleDown, split}) {
         "    disabled:pointer-events-none\n" +
         "    disabled:opacity-50 disabled:cursor-not-allowed\n" +
         "    disabled:hover:bg-transparent"
-    const [isYourTurn, setTurn] = useState(true )
+    const [isYourTurn, setTurn] = useState(true)
 
-    const swithcTurn = () =>{
+    const swithcTurn = () => {
         setTurn(!isYourTurn)
     }
 
@@ -53,7 +115,7 @@ function ActionBar({hit, stand, doubleDown, split}) {
                 <button className={buttonStyles} onClick={split} disabled={!isYourTurn}>Split</button>
             </div>
             <button onClick={swithcTurn}>Switch</button>
-            <p>{isYourTurn? ("It is your turn.") : ("It is not your turn.")}</p>
+            <p>{isYourTurn ? ("It is your turn.") : ("It is not your turn.")}</p>
         </>
     )
 }

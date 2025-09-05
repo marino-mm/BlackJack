@@ -1,4 +1,4 @@
-from model import Hand, Game
+from backend.model.BlackJack_game_models import Game
 
 def test2():
     game = Game(1)

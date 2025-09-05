@@ -1,5 +1,5 @@
 import unittest
-from backend.model import Hand, Card, CardSuit, Game
+from backend.model.BlackJack_game_models import Hand, Card, CardSuit, Game
 
 class TestHand(unittest.TestCase):
 
