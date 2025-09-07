@@ -17,6 +17,7 @@ class UserConnection:
         self.connection = websocket
         self.username = None
         self.message_Queue = Queue(1)
+        self.Ping_Pong_Queue = Queue(1)
         self.user_Status = None
 
     async def create(self):
@@ -31,7 +32,10 @@ class UserConnection:
         try:
             while True:
                 message = await self.connection.receive_json()
-                await self.message_Queue.put(message)
+                if message.get('messageType') == 'PingPong':
+                    await self.Ping_Pong_Queue.put(message)
+                else:
+                    await self.message_Queue.put(message)
         except WebSocketDisconnect:
             print('Websocket disconnected')
             self.user_Status = 'Disconnected'
@@ -93,6 +97,7 @@ class GameTable:
                 if player.user_Status != 'Connected':
                     raise WebSocketDisconnect
                 message = await player.message_Queue.get()
+                # message = await player.message_Queue.
                 await self.send_json_to_all(message)
         except Exception as e:
             self.remove_listener(player)
@@ -100,25 +105,17 @@ class GameTable:
             print(f"Error u start_game-u{e}")
 
 async def websocketPingPong(ws: UserConnection):
-    await asyncio.sleep(5)
     try:
-        await ws.connection.send_json({"action": "Ping"})
-
-        # Wait for Pong from message queue
+        await ws.connection.send_json({'messageType': "PingPong", 'message': 'Ping'})
         try:
-            message = await asyncio.wait_for(ws.message_Queue.get(), timeout=5)
+            message = await asyncio.wait_for(ws.Ping_Pong_Queue.get(), timeout=5)
         except asyncio.TimeoutError:
             print(f"No Pong response from {ws.username}")
             await ws.connection.close(reason='Pong not received')
             raise WebSocketDisconnect
 
-        if message.get('action', '') != 'Pong':
-            print(f"Invalid Pong response from {ws.username}: {message}")
-            await ws.connection.close(reason='Invalid Pong response')
-            raise WebSocketDisconnect
-
     except WebSocketDisconnect:
-        print(f"{ws.username} disconnected due to missing/invalid Pong.")
+        print(f"{ws.username} disconnected due to missing Pong.")
         gameTable.remove_listener(ws)
 
 
@@ -137,6 +134,7 @@ async def game_loop(websocket: WebSocket):
         if gameTable.STATUS != 'Playing':
             asyncio.create_task(gameTable.start_game())
         while True:
+            await asyncio.sleep(1)
             await websocketPingPong(user)
 
     except Exception as e:

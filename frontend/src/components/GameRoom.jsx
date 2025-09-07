@@ -41,15 +41,16 @@ function GameRoom() {
     useEffect(() => {
         if (lastJsonMessage) {
             console.log(lastJsonMessage)
-            if (lastJsonMessage.action === 'Ping') {
-                sendJsonMessage({'action': "Pong"})
+            if (lastJsonMessage.messageType === 'PingPong') {
+                sendJsonMessage({'messageType': "PingPong", 'message': 'Pong'})
+                console.log('Pong Sent')
             }
         }
 
     }, [lastJsonMessage, sendJsonMessage])
 
     const hit = () =>{
-        const message = {"action": "hit"}
+        const message = {'messageType': "Action", 'message': "hit"}
         sendJsonMessage(message)
         //console.log("hit")
     }
@@ -130,4 +131,9 @@ function ActionBar({hit, stand, doubleDown, split}) {
             <p>{isYourTurn ? ("It is your turn.") : ("It is not your turn.")}</p>
         </>
     )
+}
+
+function FriendsCursors({cursors}) {
+
+    return
 }
