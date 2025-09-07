@@ -1,4 +1,4 @@
-import {Fragment, useContext, useEffect, useState} from 'react'
+import {Fragment, useContext, useEffect, useRef, useState} from 'react'
 import useWebSocket, {ReadyState} from "react-use-websocket";
 
 
@@ -30,11 +30,23 @@ function GameRoom() {
         }
     }, [readyState, hasSentInitial, sendJsonMessage]);
 
+    const prevReadyState = useRef(null);
+    useEffect(() => {
+    if (prevReadyState.current !== readyState) {
+      console.log(`[WebSocket] Status changed: ${ReadyState[readyState]}`);
+      prevReadyState.current = readyState;
+    }
+  }, [readyState]);
+
     useEffect(() => {
         if (lastJsonMessage) {
             console.log(lastJsonMessage)
+            if (lastJsonMessage.action === 'Ping') {
+                sendJsonMessage({'action': "Pong"})
+            }
         }
-    }, [lastJsonMessage])
+
+    }, [lastJsonMessage, sendJsonMessage])
 
     const hit = () =>{
         const message = {"action": "hit"}
