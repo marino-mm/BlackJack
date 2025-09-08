@@ -1,5 +1,5 @@
 import asyncio
-from asyncio import Queue
+from asyncio import Queue, QueueFull
 from os import remove
 from typing import Set
 
@@ -16,7 +16,7 @@ class UserConnection:
     def __init__(self, websocket: WebSocket):
         self.connection = websocket
         self.username = None
-        self.message_Queue = Queue(1)
+        self.message_Queue = Queue(10)
         self.Ping_Pong_Queue = Queue(1)
         self.user_Status = None
 
@@ -33,9 +33,9 @@ class UserConnection:
             while True:
                 message = await self.connection.receive_json()
                 if message.get('messageType') == 'PingPong':
-                    await self.Ping_Pong_Queue.put(message)
+                    self.Ping_Pong_Queue.put_nowait(message)
                 else:
-                    await self.message_Queue.put(message)
+                    self.message_Queue.put_nowait(message)
         except WebSocketDisconnect:
             print('Websocket disconnected')
             self.user_Status = 'Disconnected'
@@ -43,6 +43,8 @@ class UserConnection:
             print('Listening task cancelled')
             self.user_Status = 'Disconnected'
             raise
+        except QueueFull:
+            pass
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, UserConnection):
@@ -63,15 +65,48 @@ class GameTable:
     def __init__(self):
         self.listening_players = []
         self.STATUS = ''
+        self.game_Queue = Queue(100)
 
-    def add_Listener(self, listener):
+    def add_listener(self, listener):
         print("dodan frajer")
         # self.listening_players.add(listener)
         self.listening_players.append(listener)
 
-
     def remove_listener(self, listener):
         self.listening_players.remove(listener)
+
+    async def game_queue_worker(self):
+        print("Game queue worker started")
+        try:
+            while True:
+                message = await self.game_Queue.get()
+                print(f"Game Queue processed this message: {message}")
+        except Exception as e:
+            print(f"game_Queue_worker: {e}")
+
+    async def game_queue_filler(self, player: UserConnection):
+        try:
+            while True:
+                message = await player.message_Queue.get()
+                self.game_Queue.put_nowait(message)
+        except Exception as e:
+            print(f"game_queue_filler: {e}")
+        except asyncio.CancelledError:
+            print('Game_queue_filler task cancelled')
+
+    async def listen_to_all_players(self, timeout: float):
+        print("Started Listening to all players")
+        task_list = set()
+        for player in self.listening_players:
+            task = asyncio.create_task(self.game_queue_filler(player))
+            task_list.add(task)
+
+        await asyncio.sleep(timeout)
+
+        print("Stopped listening to all players")
+        for task in task_list:
+            task.cancel()
+
 
     async def send_json_to_user(self, listener, data):
         await listener.connection.send_json(data)
@@ -90,21 +125,26 @@ class GameTable:
     async def start_game(self):
         print("Game started")
         self.STATUS = 'Playing'
-        # for player in self.listening_players:
-        player:UserConnection = self.listening_players[0]
-        try:
-            while True:
-                if player.user_Status != 'Connected':
-                    raise WebSocketDisconnect
-                message = await player.message_Queue.get()
-                # message = await player.message_Queue.
-                await self.send_json_to_all(message)
-        except Exception as e:
-            self.remove_listener(player)
-            self.STATUS = ''
-            print(f"Error u start_game-u{e}")
+        worker = asyncio.create_task(self.game_queue_worker())
+        await asyncio.sleep(10)
+        await self.listen_to_all_players(20)
+        print("Game ended")
+        # player_index = 0
+        # while player_index < len(self.listening_players):
+        #     player = self.listening_players[player_index]
+        #     try:
+        #         while True:
+        #             if player.user_Status != 'Connected':
+        #                 raise WebSocketDisconnect
+        #             message = asyncio.wait_for(player.message_Queue.get(), 30)
+        #             await self.send_json_to_all(message)
+        #     except Exception as e:
+        #         self.remove_listener(player)
+        #         self.STATUS = ''
+        #         print(f"Error u start_game-u{e}")
 
-async def websocketPingPong(ws: UserConnection):
+
+async def websocket_ping_pong(ws: UserConnection):
     try:
         await ws.connection.send_json({'messageType': "PingPong", 'message': 'Ping'})
         try:
@@ -119,23 +159,22 @@ async def websocketPingPong(ws: UserConnection):
         gameTable.remove_listener(ws)
 
 
-
 gameTable = GameTable()
 
 
 @game_app.websocket('/ws')
-async def game_loop(websocket: WebSocket):
+async def connect_websocket(websocket: WebSocket):
     try:
         await websocket.accept()
         user = UserConnection(websocket)
         await user.create()
-        gameTable.add_Listener(user)
+        gameTable.add_listener(user)
         asyncio.create_task(user.start_listening())
         if gameTable.STATUS != 'Playing':
             asyncio.create_task(gameTable.start_game())
         while True:
-            await asyncio.sleep(1)
-            await websocketPingPong(user)
+            await asyncio.sleep(5)
+            await websocket_ping_pong(user)
 
     except Exception as e:
         print(f"Error u game_loop-u{e}")
