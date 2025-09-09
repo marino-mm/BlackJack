@@ -7,7 +7,7 @@ function GameRoom() {
         name: "House",
         hands: [[{rank: 'A', suit: '♠'}, {rank: 'K', suit: '♠'}, {rank: 'K', suit: '♠'}]]
     })
-    const [tableSlots, settableSlots] = useState(new Array(5).fill({name: "Empty", hands: [[]]}))
+    const [tableSlots, setTableSlots] = useState(new Array(5).fill({name: "Empty", hands: [[]]}))
 
     const dev = true
     let wsUrl = null
@@ -45,6 +45,13 @@ function GameRoom() {
                 sendJsonMessage({'messageType': "PingPong", 'message': 'Pong'})
                 console.log('Pong Sent')
             }
+            if (lastJsonMessage.messageType === 'MoveSlot') {
+                const new_slots = lastJsonMessage.slot_list.map(slot => {
+                    return slot === null ? {name: "Empty", hands: [[]]} : slot
+                })
+                console.log(new_slots)
+                setTableSlots(new_slots)
+            }
         }
 
     }, [lastJsonMessage, sendJsonMessage])
@@ -53,6 +60,21 @@ function GameRoom() {
         const message = {'messageType': "Action", 'message': "hit"}
         sendJsonMessage(message)
         //console.log("hit")
+    }
+
+    const change_seat = ({slot_index}) =>{
+        /*
+        const username = "Moje ime"
+        const currentIndex = tableSlots.findIndex(slot => slot.name === username)
+        const new_slots = [...tableSlots]
+        if (currentIndex !== -1) {
+            new_slots[currentIndex] = {...new_slots[currentIndex], name: "Empty"}
+        }
+        new_slots[slot_index] = {...new_slots[slot_index], name: username}
+        setTableSlots(new_slots)
+        */
+        sendJsonMessage({'messageType': "MoveSlot", 'new_slot_index': slot_index})
+
     }
 
     return (
@@ -64,7 +86,8 @@ function GameRoom() {
                 {tableSlots.map((slot, index) => (
                     <PlayerHands key={index}
                                  className="h-full border-4 border-green-300 flex items-center justify-center"
-                                 player={slot}/>))}
+                                 player={slot}
+                                 onClick={() => change_seat({ slot_index: index })}/>))}
 
             </div>
             <ActionBar hit={hit}></ActionBar>
@@ -74,9 +97,10 @@ function GameRoom() {
 
 export default GameRoom;
 
-function PlayerHands({player}) {
+function PlayerHands({player, onClick}) {
+
     return (
-        <div className="grid grid-cols-1 border-purple-700 border-1 m-2">
+        <div className="grid grid-cols-1 border-purple-700 border-1 m-2" onClick={onClick}>
             <h3 className="font-bold text-lg">{player.name}</h3>
             <div className="grid grid-cols-1 gap-2 justify-center p-1">
                 {player.hands.map((hand, index) => (

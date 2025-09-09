@@ -1,13 +1,9 @@
 import asyncio
+import hashlib
 from asyncio import Queue, QueueFull
-from os import remove
-from typing import Set
 
 from fastapi import FastAPI
-from starlette.applications import Starlette
 from starlette.websockets import WebSocket, WebSocketDisconnect
-
-from backend.model.BlackJack_game_models import Deck
 
 game_app = FastAPI()
 
@@ -16,16 +12,18 @@ class UserConnection:
     def __init__(self, websocket: WebSocket):
         self.connection = websocket
         self.username = None
+        self.username_hash = None
         self.message_Queue = Queue(10)
         self.Ping_Pong_Queue = Queue(1)
         self.user_Status = None
+        self.parent_Queue = None
 
     async def create(self):
         while not self.username:
             message_dict = await self.connection.receive_json()
             if message_dict.get('username'):
                 self.username = message_dict.get('username')
-
+        self.username_hash = str(hash(self.connection))
         self.user_Status = 'Connected'
 
     async def start_listening(self):
@@ -34,6 +32,9 @@ class UserConnection:
                 message = await self.connection.receive_json()
                 if message.get('messageType') == 'PingPong':
                     self.Ping_Pong_Queue.put_nowait(message)
+                elif self.parent_Queue:
+                    message['user'] = f"{self.username} {self.username_hash}"
+                    self.parent_Queue.put_nowait(message)
                 else:
                     self.message_Queue.put_nowait(message)
         except WebSocketDisconnect:
@@ -65,47 +66,46 @@ class GameTable:
     def __init__(self):
         self.listening_players = []
         self.STATUS = ''
+        self.table_slots = [None, None, None, None, None]
         self.game_Queue = Queue(100)
 
     def add_listener(self, listener):
-        print("dodan frajer")
-        # self.listening_players.add(listener)
+        print("Listener added")
+        listener.parent_Queue = self.game_Queue
         self.listening_players.append(listener)
 
     def remove_listener(self, listener):
         self.listening_players.remove(listener)
+
+    async def move_slot(self, message):
+        user = message.get('user')
+        new_slot = message.get('new_slot_index')
+        old_index = None
+
+        for index, slot in enumerate(self.table_slots):
+            if slot is not None:
+                if slot.get('name') == user:
+                    old_index = index
+
+        if old_index is not None:
+            self.table_slots[old_index] = {'name': "Empty", "hands": [[]]}
+
+        target_slot = self.table_slots[new_slot]
+        if target_slot is None or target_slot.get('name') == "Empty":
+            self.table_slots[new_slot] = {'name': user, 'hands': [[]]}
 
     async def game_queue_worker(self):
         print("Game queue worker started")
         try:
             while True:
                 message = await self.game_Queue.get()
-                print(f"Game Queue processed this message: {message}")
+                # print(f"Game Queue processed this message: {message}")
+                if message.get('messageType') == 'MoveSlot':
+                    await self.move_slot(message)
+                    await self.send_json_to_all({'messageType': 'MoveSlot', 'slot_list': self.table_slots})
         except Exception as e:
             print(f"game_Queue_worker: {e}")
 
-    async def game_queue_filler(self, player: UserConnection):
-        try:
-            while True:
-                message = await player.message_Queue.get()
-                self.game_Queue.put_nowait(message)
-        except Exception as e:
-            print(f"game_queue_filler: {e}")
-        except asyncio.CancelledError:
-            print('Game_queue_filler task cancelled')
-
-    async def listen_to_all_players(self, timeout: float):
-        print("Started Listening to all players")
-        task_list = set()
-        for player in self.listening_players:
-            task = asyncio.create_task(self.game_queue_filler(player))
-            task_list.add(task)
-
-        await asyncio.sleep(timeout)
-
-        print("Stopped listening to all players")
-        for task in task_list:
-            task.cancel()
 
 
     async def send_json_to_user(self, listener, data):
@@ -125,9 +125,13 @@ class GameTable:
     async def start_game(self):
         print("Game started")
         self.STATUS = 'Playing'
-        worker = asyncio.create_task(self.game_queue_worker())
-        await asyncio.sleep(10)
-        await self.listen_to_all_players(20)
+        # worker = asyncio.create_task(self.game_queue_worker())
+        await asyncio.sleep(1)
+        # await self.listen_to_all_players(20)
+        try:
+            await asyncio.wait_for(self.game_queue_worker(), 20)
+        except asyncio.TimeoutError:
+            print("20 second passed")
         print("Game ended")
         # player_index = 0
         # while player_index < len(self.listening_players):
