@@ -9,6 +9,18 @@ function GameRoom() {
     })
     const [tableSlots, setTableSlots] = useState(new Array(5).fill({name: "Empty", hands: [[]]}))
 
+    const [username, setUsername] = useState('Test' + '_' + createRandomString(5))
+
+    function createRandomString(length) {
+      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+      let result = "";
+      for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return result;
+    }
+
+
     const dev = true
     let wsUrl = null
     if (dev){
@@ -25,7 +37,7 @@ function GameRoom() {
 
     useEffect(() => {
         if (readyState === ReadyState.OPEN && !hasSentInitial) {
-            sendJsonMessage({"username": "test"})
+            sendJsonMessage({"username": username})
             setHasSentInitial(true);
         }
     }, [readyState, hasSentInitial, sendJsonMessage]);

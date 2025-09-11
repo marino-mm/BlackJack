@@ -12,18 +12,17 @@ class UserConnection:
     def __init__(self, websocket: WebSocket):
         self.connection = websocket
         self.username = None
-        self.username_hash = None
         self.message_Queue = Queue(10)
         self.Ping_Pong_Queue = Queue(1)
         self.user_Status = None
         self.parent_Queue = None
+        self.SEND_MESSAGE_TO_PARENT = False
 
     async def create(self):
         while not self.username:
             message_dict = await self.connection.receive_json()
             if message_dict.get('username'):
                 self.username = message_dict.get('username')
-        self.username_hash = str(hash(self.connection))
         self.user_Status = 'Connected'
 
     async def start_listening(self):
@@ -32,8 +31,8 @@ class UserConnection:
                 message = await self.connection.receive_json()
                 if message.get('messageType') == 'PingPong':
                     self.Ping_Pong_Queue.put_nowait(message)
-                elif self.parent_Queue:
-                    message['user'] = f"{self.username} {self.username_hash}"
+                elif self.parent_Queue and self.SEND_MESSAGE_TO_PARENT:
+                    message['user'] = f"{self.username}"
                     self.parent_Queue.put_nowait(message)
                 else:
                     self.message_Queue.put_nowait(message)
@@ -87,22 +86,31 @@ class GameTable:
                 if slot.get('name') == user:
                     old_index = index
 
-        if old_index is not None:
-            self.table_slots[old_index] = {'name': "Empty", "hands": [[]]}
-
         target_slot = self.table_slots[new_slot]
         if target_slot is None or target_slot.get('name') == "Empty":
             self.table_slots[new_slot] = {'name': user, 'hands': [[]]}
+            if old_index is not None:
+                self.table_slots[old_index] = {'name': "Empty", "hands": [[]]}
 
-    async def game_queue_worker(self):
+    async def game_queue_worker(self, filter_player = None):
         print("Game queue worker started")
         try:
             while True:
                 message = await self.game_Queue.get()
+                print(message)
                 # print(f"Game Queue processed this message: {message}")
-                if message.get('messageType') == 'MoveSlot':
+                if filter_player:
+                    print(f"message username: {message.get('user')}, filter_player: {filter_player.username}")
+                    if message.get('user') == filter_player.username:
+                        # Process players move
+                        await self.send_json_to_all(message)
+                        pass
+                elif message.get('messageType') == 'MoveSlot':
                     await self.move_slot(message)
                     await self.send_json_to_all({'messageType': 'MoveSlot', 'slot_list': self.table_slots})
+                else:
+                    # Do nothing if it is not players message
+                    pass
         except Exception as e:
             print(f"game_Queue_worker: {e}")
 
@@ -122,16 +130,39 @@ class GameTable:
                 pass
                 # self.remove_listener(listener)
 
+
+    async def game_waiting_for_players_to_sit(self):
+        for player in self.listening_players:
+            player.SEND_MESSAGE_TO_PARENT = True
+        task = asyncio.create_task(self.game_queue_worker(), name='game_waiting_for_players_to_sit')
+        await asyncio.sleep(10)
+        task.cancel()
+        for player in self.listening_players:
+            player.SEND_MESSAGE_TO_PARENT = False
+
+    async def game_waiting_for_players_move(self, player):
+        player.SEND_MESSAGE_TO_PARENT = True
+        task = asyncio.create_task(self.game_queue_worker(player), name='waiting_for_players_move')
+        await asyncio.sleep(30)
+        task.cancel()
+        for player in self.listening_players:
+            player.SEND_MESSAGE_TO_PARENT = False
+
     async def start_game(self):
         print("Game started")
         self.STATUS = 'Playing'
         # worker = asyncio.create_task(self.game_queue_worker())
         await asyncio.sleep(1)
-        # await self.listen_to_all_players(20)
-        try:
-            await asyncio.wait_for(self.game_queue_worker(), 20)
-        except asyncio.TimeoutError:
-            print("20 second passed")
+        await self.game_waiting_for_players_to_sit()
+        for slot in reversed(self.table_slots.copy()):
+            if slot is None:
+                continue
+            player_name = slot['name']
+            player = None
+            for temp in self.listening_players:
+                if temp.username == player_name:
+                    player = temp
+            await self.game_waiting_for_players_move(player)
         print("Game ended")
         # player_index = 0
         # while player_index < len(self.listening_players):
@@ -177,7 +208,7 @@ async def connect_websocket(websocket: WebSocket):
         if gameTable.STATUS != 'Playing':
             asyncio.create_task(gameTable.start_game())
         while True:
-            await asyncio.sleep(5)
+            await asyncio.sleep(10)
             await websocket_ping_pong(user)
 
     except Exception as e:
