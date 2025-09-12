@@ -162,8 +162,7 @@ class GameTable:
             hand = player.hands[hand_index]
             task = asyncio.create_task(self.game_queue_worker(player, hand), name='waiting_for_players_move')
             try:
-                result = await asyncio.wait_for(task, timeout=30)
-
+                result = await asyncio.wait_for(task, timeout=10)
                 pass
             except asyncio.TimeoutError:
                 task.cancel()
@@ -196,9 +195,16 @@ class GameTable:
         self.deck.reset_cards()
         self.house.hands.clear()
         for player in players_turn_list:
-            player.hands.clear()
+            if player not in self.listening_players:
+                player_index = self.table_slots.index(player)
+                self.table_slots[player_index] = None
+            else:
+                player.hands.clear()
+
         await self.send_json_to_all({'messageType': 'UpdateHouse', 'houseHand': self.house.hands_json()})
         await self.send_updated_slots()
+
+
 
     async def deal_to_all_hands(self, players_turn_list):
         for player in players_turn_list: player.hands.append(Hand())
@@ -241,6 +247,6 @@ async def connect_websocket(websocket: WebSocket):
         while True:
             await asyncio.sleep(10)
             await websocket_ping_pong(user)
-
     except Exception as e:
         print(f"Error u game_loop-u{e}")
+        gameTable.remove_listener(user)
