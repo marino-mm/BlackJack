@@ -57,7 +57,7 @@ function GameRoom() {
                 sendJsonMessage({'messageType': "PingPong", 'message': 'Pong'})
                 console.log('Pong Sent')
             }
-            if (lastJsonMessage.messageType === 'MoveSlot') {
+            if (lastJsonMessage.messageType === 'UpdateSlots') {
                 const new_slots = lastJsonMessage.slot_list.map(slot => {
                     return slot === null ? {name: "Empty", hands: [[]]} : slot
                 })

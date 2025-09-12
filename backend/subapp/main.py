@@ -1,9 +1,12 @@
 import asyncio
 import hashlib
 from asyncio import Queue, QueueFull
+from typing import List
 
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
+
+from backend.model.BlackJack_game_models import Deck, House, Hand
 
 game_app = FastAPI()
 
@@ -17,6 +20,7 @@ class UserConnection:
         self.user_Status = None
         self.parent_Queue = None
         self.SEND_MESSAGE_TO_PARENT = False
+        self.hands = []
 
     async def create(self):
         while not self.username:
@@ -32,7 +36,8 @@ class UserConnection:
                 if message.get('messageType') == 'PingPong':
                     self.Ping_Pong_Queue.put_nowait(message)
                 elif self.parent_Queue and self.SEND_MESSAGE_TO_PARENT:
-                    message['user'] = f"{self.username}"
+                    # message['user'] = f"{self.username}"
+                    message['user'] = self
                     self.parent_Queue.put_nowait(message)
                 else:
                     self.message_Queue.put_nowait(message)
@@ -45,6 +50,15 @@ class UserConnection:
             raise
         except QueueFull:
             pass
+
+    def hit_hand(self, hand: Hand, card) -> None:
+        hand.add_card(card)
+
+    def frontend_dict(self):
+        return {
+            'name': self.username,
+            'hands': self.hands,
+        }
 
     def __eq__(self, value: object) -> bool:
         if isinstance(value, UserConnection):
@@ -61,12 +75,15 @@ class UserConnection:
         return str(self)
 
 
+
 class GameTable:
     def __init__(self):
         self.listening_players = []
         self.STATUS = ''
-        self.table_slots = [None, None, None, None, None]
+        self.table_slots:List[UserConnection|None] = [None, None, None, None, None]
         self.game_Queue = Queue(100)
+        self.deck = Deck()
+        self.house = House()
 
     def add_listener(self, listener):
         print("Listener added")
@@ -77,44 +94,40 @@ class GameTable:
         self.listening_players.remove(listener)
 
     async def move_slot(self, message):
-        user = message.get('user')
+        user:UserConnection = message.get('user')
         new_slot = message.get('new_slot_index')
-        old_index = None
-
-        for index, slot in enumerate(self.table_slots):
-            if slot is not None:
-                if slot.get('name') == user:
-                    old_index = index
-
+        try:
+            old_index = self.table_slots.index(user)
+        except ValueError:
+            old_index = None
         target_slot = self.table_slots[new_slot]
-        if target_slot is None or target_slot.get('name') == "Empty":
-            self.table_slots[new_slot] = {'name': user, 'hands': [[]]}
+        if target_slot is None:
+            self.table_slots[new_slot] = user
             if old_index is not None:
-                self.table_slots[old_index] = {'name': "Empty", "hands": [[]]}
+                self.table_slots[old_index] = None
 
-    async def game_queue_worker(self, filter_player = None):
+    async def game_queue_worker(self, filter_player = None, hand = None):
         print("Game queue worker started")
         try:
             while True:
                 message = await self.game_Queue.get()
-                print(message)
-                # print(f"Game Queue processed this message: {message}")
                 if filter_player:
-                    print(f"message username: {message.get('user')}, filter_player: {filter_player.username}")
                     if message.get('user') == filter_player.username:
                         # Process players move
+                        if message.get('messageType') == 'Action':
+                            if message.get('message') == 'hit':
+                                filter_player.hit_hand(hand, self.deck.get_card())
                         await self.send_json_to_all(message)
+                        # for send_data in self.table_slots:
                         pass
                 elif message.get('messageType') == 'MoveSlot':
                     await self.move_slot(message)
-                    await self.send_json_to_all({'messageType': 'MoveSlot', 'slot_list': self.table_slots})
+                    await self.send_json_to_all({'messageType': 'UpdateSlots', 'slot_list': [x.frontend_dict() if x is not None else None for x in self.table_slots]})
                 else:
                     # Do nothing if it is not players message
                     pass
         except Exception as e:
             print(f"game_Queue_worker: {e}")
-
-
 
     async def send_json_to_user(self, listener, data):
         await listener.connection.send_json(data)
@@ -122,14 +135,9 @@ class GameTable:
     async def send_json_to_all(self, data):
         for index, listener in enumerate(self.listening_players):
             try:
-                print(listener.connection)
                 await self.send_json_to_user(listener, data)
             except Exception as e:
                 print(e)
-                # print(index)
-                pass
-                # self.remove_listener(listener)
-
 
     async def game_waiting_for_players_to_sit(self):
         for player in self.listening_players:
@@ -140,43 +148,32 @@ class GameTable:
         for player in self.listening_players:
             player.SEND_MESSAGE_TO_PARENT = False
 
-    async def game_waiting_for_players_move(self, player):
+    async def game_waiting_for_players_move_per_hand(self, player):
         player.SEND_MESSAGE_TO_PARENT = True
-        task = asyncio.create_task(self.game_queue_worker(player), name='waiting_for_players_move')
-        await asyncio.sleep(30)
-        task.cancel()
-        for player in self.listening_players:
-            player.SEND_MESSAGE_TO_PARENT = False
+        for hand in player.hands:
+            task = asyncio.create_task(self.game_queue_worker(player, hand), name='waiting_for_players_move')
+            await asyncio.sleep(30)
+            task.cancel()
+        player.SEND_MESSAGE_TO_PARENT = False
 
     async def start_game(self):
         print("Game started")
         self.STATUS = 'Playing'
-        # worker = asyncio.create_task(self.game_queue_worker())
         await asyncio.sleep(1)
         await self.game_waiting_for_players_to_sit()
-        for slot in reversed(self.table_slots.copy()):
-            if slot is None:
+        players_turn_list = reversed(self.table_slots.copy())
+        players_turn_list = [player for player in players_turn_list if player is not None]
+        for player in players_turn_list:
+            player.hands.append(Hand())
+            player.hit_hand(player.hands[0], self.deck.get_card())
+            player.hit_hand(player.hands[0], self.deck.get_card())
+
+        await self.send_json_to_all({'messageType': 'UpdateSlots','slot_list': [x.frontend_dict() if x is not None else None for x in self.table_slots]})
+        for player in reversed(self.table_slots.copy()):
+            if player is None:
                 continue
-            player_name = slot['name']
-            player = None
-            for temp in self.listening_players:
-                if temp.username == player_name:
-                    player = temp
-            await self.game_waiting_for_players_move(player)
+            await self.game_waiting_for_players_move_per_hand(player)
         print("Game ended")
-        # player_index = 0
-        # while player_index < len(self.listening_players):
-        #     player = self.listening_players[player_index]
-        #     try:
-        #         while True:
-        #             if player.user_Status != 'Connected':
-        #                 raise WebSocketDisconnect
-        #             message = asyncio.wait_for(player.message_Queue.get(), 30)
-        #             await self.send_json_to_all(message)
-        #     except Exception as e:
-        #         self.remove_listener(player)
-        #         self.STATUS = ''
-        #         print(f"Error u start_game-u{e}")
 
 
 async def websocket_ping_pong(ws: UserConnection):
