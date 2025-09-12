@@ -3,7 +3,8 @@ import mimetypes
 from pathlib import Path
 from typing import Set
 
-from fastapi import FastAPI, WebSocket, Response
+from fastapi import FastAPI, WebSocket, Response, Request
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
 
@@ -126,6 +127,14 @@ app.mount("/game", game_app)
 
 # app.mount("/vanilla_js", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="vanilla_static")
 # app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
-app.mount("/react", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
-app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="static")
 
+@app.get("/react/{full_path:path}")
+async def serve_react_index(request: Request, full_path: str):
+    file_path = FRONTEND_DIST / full_path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+
+    return FileResponse(FRONTEND_DIST / "index.html")
+
+app.mount("/react", StaticFiles(directory=FRONTEND_DIST), name="static")
+app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="static")

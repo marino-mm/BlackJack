@@ -3,36 +3,32 @@ import useWebSocket, {ReadyState} from "react-use-websocket";
 
 
 function GameRoom() {
-    const [house, setHouse] = useState({
-        name: "House",
-        hands: [[{rank: 'A', suit: '♠'}, {rank: 'K', suit: '♠'}, {rank: 'K', suit: '♠'}]]
-    })
+    const [house, setHouse] = useState({name: "House",hands: [[]]})
     const [tableSlots, setTableSlots] = useState(new Array(5).fill({name: "Empty", hands: [[]]}))
 
     const [username, setUsername] = useState('Test' + '_' + createRandomString(5))
 
     function createRandomString(length) {
-      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-      let result = "";
-      for (let i = 0; i < length; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return result;
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        let result = "";
+        for (let i = 0; i < length; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
     }
 
 
-    const dev = true
+    const dev = false
     let wsUrl = null
-    if (dev){
+    if (dev) {
         wsUrl = "http://localhost:8000/game/ws";
-    }
-    else{
+    } else {
         const loc = window.location;
         const wsProtocol = loc.protocol === "https:" ? "wss" : "ws";
-        wsUrl = `${wsProtocol}://${loc.host}/ws`;
+        wsUrl = `${wsProtocol}://${loc.host}/game/ws`;
     }
 
-    const { sendJsonMessage, readyState, lastJsonMessage } = useWebSocket(wsUrl)
+    const {sendJsonMessage, readyState, lastJsonMessage} = useWebSocket(wsUrl)
     const [hasSentInitial, setHasSentInitial] = useState(false)
 
     useEffect(() => {
@@ -44,18 +40,18 @@ function GameRoom() {
 
     const prevReadyState = useRef(null);
     useEffect(() => {
-    if (prevReadyState.current !== readyState) {
-      console.log(`[WebSocket] Status changed: ${ReadyState[readyState]}`);
-      prevReadyState.current = readyState;
-    }
-  }, [readyState]);
+        if (prevReadyState.current !== readyState) {
+            console.log(`[WebSocket] Status changed: ${ReadyState[readyState]}`);
+            prevReadyState.current = readyState;
+        }
+    }, [readyState]);
 
     useEffect(() => {
         if (lastJsonMessage) {
-            console.log(lastJsonMessage)
+            // console.log(lastJsonMessage)
             if (lastJsonMessage.messageType === 'PingPong') {
                 sendJsonMessage({'messageType': "PingPong", 'message': 'Pong'})
-                console.log('Pong Sent')
+                // console.log('Pong Sent')
             }
             if (lastJsonMessage.messageType === 'UpdateSlots') {
                 const new_slots = lastJsonMessage.slot_list.map(slot => {
@@ -64,29 +60,23 @@ function GameRoom() {
                 console.log(new_slots)
                 setTableSlots(new_slots)
             }
+            if (lastJsonMessage.messageType === 'UpdateHouse') {
+                const new_house_hand = {...house, hands: lastJsonMessage.houseHand}
+                console.log(new_house_hand)
+                setHouse(new_house_hand)
+            }
         }
 
     }, [lastJsonMessage, sendJsonMessage])
 
-    const hit = () =>{
-        const message = {'messageType': "Action", 'message': "hit"}
+    const send_action = ({action}) => {
+        const message = {'messageType': "Action", 'message': action}
         sendJsonMessage(message)
-        //console.log("hit")
+        //console.log(`Send_action: ${JSON.stringify(message)}`)
     }
 
-    const change_seat = ({slot_index}) =>{
-        /*
-        const username = "Moje ime"
-        const currentIndex = tableSlots.findIndex(slot => slot.name === username)
-        const new_slots = [...tableSlots]
-        if (currentIndex !== -1) {
-            new_slots[currentIndex] = {...new_slots[currentIndex], name: "Empty"}
-        }
-        new_slots[slot_index] = {...new_slots[slot_index], name: username}
-        setTableSlots(new_slots)
-        */
+    const change_seat = ({slot_index}) => {
         sendJsonMessage({'messageType': "MoveSlot", 'new_slot_index': slot_index})
-
     }
 
     return (
@@ -99,10 +89,10 @@ function GameRoom() {
                     <PlayerHands key={index}
                                  className="h-full border-4 border-green-300 flex items-center justify-center"
                                  player={slot}
-                                 onClick={() => change_seat({ slot_index: index })}/>))}
+                                 onClick={() => change_seat({slot_index: index})}/>))}
 
             </div>
-            <ActionBar hit={hit}></ActionBar>
+            <ActionBar send_action={send_action}></ActionBar>
         </div>
     )
 }
@@ -143,7 +133,7 @@ function Card({rank, suit}) {
     )
 }
 
-function ActionBar({hit, stand, doubleDown, split}) {
+function ActionBar({send_action}) {
     const buttonStyles = "border-4 border-gray-400\n" +
         "    py-2 px-4 rounded\n" +
         "    disabled:pointer-events-none\n" +
@@ -151,25 +141,28 @@ function ActionBar({hit, stand, doubleDown, split}) {
         "    disabled:hover:bg-transparent"
     const [isYourTurn, setTurn] = useState(true)
 
-    const swithcTurn = () => {
+    const switchTurn = () => {
         setTurn(!isYourTurn)
     }
 
     return (
         <>
             <div className="grid grid-cols-4 gap-4 h-fit w-full border-4 border-yellow-200 p-4 ">
-                <button className={buttonStyles} onClick={hit} disabled={!isYourTurn}>Hit</button>
-                <button className={buttonStyles} onClick={stand} disabled={!isYourTurn}>Stand</button>
-                <button className={buttonStyles} onClick={doubleDown} disabled={!isYourTurn}>Double Down</button>
-                <button className={buttonStyles} onClick={split} disabled={!isYourTurn}>Split</button>
+                <button className={buttonStyles} onClick={() => send_action({action: 'hit'})}
+                        disabled={!isYourTurn}>Hit
+                </button>
+                <button className={buttonStyles} onClick={() => send_action({action: 'stand'})}
+                        disabled={!isYourTurn}>Stand
+                </button>
+                <button className={buttonStyles} onClick={() => send_action({action: 'double_down'})}
+                        disabled={!isYourTurn}>Double Down
+                </button>
+                <button className={buttonStyles} onClick={() => send_action({action: 'split'})}
+                        disabled={!isYourTurn}>Split
+                </button>
             </div>
-            <button onClick={swithcTurn}>Switch</button>
+            <button onClick={switchTurn}>Switch</button>
             <p>{isYourTurn ? ("It is your turn.") : ("It is not your turn.")}</p>
         </>
     )
-}
-
-function FriendsCursors({cursors}) {
-
-    return
 }

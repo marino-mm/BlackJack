@@ -202,6 +202,8 @@ class BasePlayer(ABC):
         else:
             print("You can't double down hand!")
 
+    def hands_json(self):
+        return [hand.json_hand() for hand in self.hands]
 
 class Player(BasePlayer):
     def __init__(self, score: int = 100) -> None:
@@ -220,8 +222,15 @@ class Player(BasePlayer):
 
 class House(BasePlayer):
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.hands: List[Hand] = [Hand()]
+
     def display_hand_partial(self):
         print(f"House :{[self.hands[0].cards[0], '?']}")
+
+    def partial_hand_json(self):
+        return [[self.hands[0].cards[0].json_card(), {"rank": "?", "suit": None}]]
 
 
 class Game:
