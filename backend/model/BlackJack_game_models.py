@@ -59,6 +59,8 @@ class Card:
             raise CantCompareObjectError
         return self.rank == value.rank and self.suit == value.suit
 
+    def json_card(self ):
+        return {"rank": self.rank, "suit": self.suit}
 
 class Deck:
     def __init__(self) -> None:
@@ -126,6 +128,9 @@ class Hand:
     def display_hand(self):
         print(self.cards)
 
+    def json_hand(self):
+        return [card.json_card() for card in self.cards]
+
     def get_partial_hand_str(self):
         return f"{[self.cards[0], '?']}"
 
@@ -144,8 +149,9 @@ class Hand:
     def calculate_hand_value(self):
         self.hand_value = 0
         card_rank_list = []
-        self.cards = sorted(self.cards)
-        for card in self.cards:
+        cards = self.cards.copy()
+        cards = sorted(cards)
+        for card in cards:
             card_rank_list.append(card.rank)
             if card.rank in ["J", "Q", "K", "10"]:
                 self.hand_value += 10

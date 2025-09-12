@@ -6,13 +6,14 @@ from typing import List
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from backend.model.BlackJack_game_models import Deck, House, Hand
+from backend.model.BlackJack_game_models import Deck, House, Hand, Player
 
 game_app = FastAPI()
 
 
-class UserConnection:
+class UserConnection(Player):
     def __init__(self, websocket: WebSocket):
+        super().__init__()
         self.connection = websocket
         self.username = None
         self.message_Queue = Queue(10)
@@ -20,7 +21,6 @@ class UserConnection:
         self.user_Status = None
         self.parent_Queue = None
         self.SEND_MESSAGE_TO_PARENT = False
-        self.hands = []
 
     async def create(self):
         while not self.username:
@@ -51,13 +51,10 @@ class UserConnection:
         except QueueFull:
             pass
 
-    def hit_hand(self, hand: Hand, card) -> None:
-        hand.add_card(card)
-
     def frontend_dict(self):
         return {
             'name': self.username,
-            'hands': self.hands,
+            'hands': [hand.json_hand() for hand in self.hands],
         }
 
     def __eq__(self, value: object) -> bool:
@@ -106,18 +103,29 @@ class GameTable:
             if old_index is not None:
                 self.table_slots[old_index] = None
 
-    async def game_queue_worker(self, filter_player = None, hand = None):
+    async def game_queue_worker(self, filter_player: UserConnection | None = None, hand = None):
         print("Game queue worker started")
         try:
             while True:
                 message = await self.game_Queue.get()
                 if filter_player:
-                    if message.get('user') == filter_player.username:
+                    # if message.get('user').username == filter_player.username:
+                    if message.get('user') == filter_player:
                         # Process players move
                         if message.get('messageType') == 'Action':
                             if message.get('message') == 'hit':
                                 filter_player.hit_hand(hand, self.deck.get_card())
-                        await self.send_json_to_all(message)
+                            if message.get('message') == 'stand':
+                                return 'Player action was stand'
+                            if message.get('message') == 'double_down':
+                                filter_player.dobule_down_hand(hand, self.deck.get_card())
+                                return 'Player action was double_down'
+                            if message.get('message') == 'split':
+                                filter_player.split_hand(hand)
+                        # await self.send_json_to_all(message)
+                        await self.send_json_to_all({'messageType': 'UpdateSlots',
+                                                     'slot_list': [x.frontend_dict() if x is not None else None for x in
+                                                                   self.table_slots]})
                         # for send_data in self.table_slots:
                         pass
                 elif message.get('messageType') == 'MoveSlot':
@@ -143,17 +151,24 @@ class GameTable:
         for player in self.listening_players:
             player.SEND_MESSAGE_TO_PARENT = True
         task = asyncio.create_task(self.game_queue_worker(), name='game_waiting_for_players_to_sit')
-        await asyncio.sleep(10)
+        await asyncio.sleep(5)
         task.cancel()
         for player in self.listening_players:
             player.SEND_MESSAGE_TO_PARENT = False
 
     async def game_waiting_for_players_move_per_hand(self, player):
         player.SEND_MESSAGE_TO_PARENT = True
-        for hand in player.hands:
+        hand_index = 0
+        while len(player.hands) < hand_index:
+        # for hand in player.hands:
+            hand = player.hands[hand_index]
             task = asyncio.create_task(self.game_queue_worker(player, hand), name='waiting_for_players_move')
-            await asyncio.sleep(30)
-            task.cancel()
+            try:
+                result = await asyncio.wait_for(task, timeout=30)
+                pass
+            except asyncio.TimeoutError:
+                task.cancel()
+            hand_index += 1
         player.SEND_MESSAGE_TO_PARENT = False
 
     async def start_game(self):
