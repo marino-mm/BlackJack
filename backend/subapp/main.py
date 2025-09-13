@@ -51,16 +51,16 @@ class UserConnection(Player):
         except QueueFull:
             pass
 
-    def frontend_dict(self):
-        return {
-            'name': self.username,
-            'hands': self.hands_json(),
-        }
-
     def __eq__(self, value: object) -> bool:
         if isinstance(value, UserConnection):
             return self.username == value.username
         return False
+
+    def frontend_dict(self) -> dict:
+        return {
+            'name': self.username,
+            'hands': self.hands_json()
+        }
 
     def __hash__(self):
         return hash((self.username, self.connection))
@@ -87,7 +87,9 @@ class GameTable:
         self.listening_players.append(listener)
 
     def remove_listener(self, listener):
+        print(f"Before removing listener: {[listener.username for listener in self.listening_players]}")
         self.listening_players.remove(listener)
+        print(f"After listener: {[listener.username for listener in self.listening_players]}")
 
     async def move_slot(self, message):
         user: UserConnection = message.get('user')
@@ -108,9 +110,7 @@ class GameTable:
             while True:
                 message = await self.game_Queue.get()
                 if filter_player:
-                    # if message.get('user').username == filter_player.username:
                     if message.get('user') == filter_player:
-                        # Process players move
                         if message.get('messageType') == 'Action':
                             if message.get('message') == 'hit':
                                 filter_player.hit_hand(hand, self.deck.get_card())
@@ -121,8 +121,9 @@ class GameTable:
                                 return 'Player action was double_down'
                             if message.get('message') == 'split':
                                 filter_player.split_hand(hand)
-                        await self.send_updated_slots()
-                        pass
+                        await self.send_updated_slots(filter_player, hand)
+                    if hand.is_busted():
+                        return 'Hand is busted'
                 elif message.get('messageType') == 'MoveSlot':
                     await self.move_slot(message)
                     await self.send_updated_slots()
@@ -132,8 +133,26 @@ class GameTable:
         except Exception as e:
             print(f"game_Queue_worker: {e}")
 
-    async def send_updated_slots(self):
-        await self.send_json_to_all({'messageType': 'UpdateSlots','slot_list': [x.frontend_dict() if x is not None else None for x in self.table_slots]})
+    async def send_updated_slots(self, activePlayer:UserConnection =None, activeHand=None):
+        data = {'messageType': 'UpdateSlots',
+                'slot_list': [x.frontend_dict() if x is not None else None for x in self.table_slots]
+                }
+        if activeHand:
+            activePlayerIndex = -1
+            activeHandIndex = -1
+            for i, slot in enumerate(data['slot_list']):
+                if not slot:
+                    continue
+                if slot['name'] == activePlayer.username:
+                    activePlayerIndex = i
+                    for hi, hand in enumerate(slot['hands']):
+                        if hand == activeHand:
+                            activeHandIndex = hi
+                            break
+
+            data['slot_list'][activePlayerIndex]['hands'][activeHandIndex]['isActiveHand'] = True
+
+        await self.send_json_to_all(data)
 
     async def send_json_to_user(self, listener, data):
         await listener.connection.send_json(data)
@@ -149,7 +168,7 @@ class GameTable:
         for player in self.listening_players:
             player.SEND_MESSAGE_TO_PARENT = True
         task = asyncio.create_task(self.game_queue_worker(), name='game_waiting_for_players_to_sit')
-        await asyncio.sleep(20)
+        await asyncio.sleep(5)
         task.cancel()
         for player in self.listening_players:
             player.SEND_MESSAGE_TO_PARENT = False
@@ -158,8 +177,8 @@ class GameTable:
         player.SEND_MESSAGE_TO_PARENT = True
         hand_index = 0
         while hand_index < len(player.hands):
-            # for hand in player.hands:
             hand = player.hands[hand_index]
+            await self.send_updated_slots(player, hand)
             task = asyncio.create_task(self.game_queue_worker(player, hand), name='waiting_for_players_move')
             try:
                 result = await asyncio.wait_for(task, timeout=10)
@@ -168,6 +187,13 @@ class GameTable:
                 task.cancel()
             hand_index += 1
         player.SEND_MESSAGE_TO_PARENT = False
+
+    async def send_activ_player(self, player = None):
+        data = {
+            "messageType": "UpdateActivPlayer",
+            "activ_player_username": '' if player is None else player.username,
+        }
+        await self.send_json_to_all(data)
 
     async def start_game(self):
         print("Game started")
@@ -182,15 +208,26 @@ class GameTable:
             await self.send_updated_slots()
             await self.send_json_to_all({'messageType': 'UpdateHouse', 'houseHand': self.house.partial_hand_json()})
             for player in players_turn_list:
+                await self.send_activ_player(player)
                 await self.game_waiting_for_players_move_per_hand(player)
 
+            await self.send_activ_player()
+            self.house_play_hand()
             await self.send_json_to_all({'messageType': 'UpdateHouse', 'houseHand': self.house.hands_json()})
             await asyncio.sleep(10)
             await self.restart_round(players_turn_list)
             print("Round ended")
-            
+
         print("Game ended")
-    
+
+    def house_play_hand(self):
+        house = self.house
+        hand = self.house.hands[0]
+        while hand.hand_value <= 16:
+            if hand.is_busted():
+                break
+            house.hit_hand(hand, self.deck.get_card())
+
     async def restart_round(self, players_turn_list):
         self.deck.reset_cards()
         self.house.hands.clear()
@@ -203,8 +240,6 @@ class GameTable:
 
         await self.send_json_to_all({'messageType': 'UpdateHouse', 'houseHand': self.house.hands_json()})
         await self.send_updated_slots()
-
-
 
     async def deal_to_all_hands(self, players_turn_list):
         for player in players_turn_list: player.hands.append(Hand())

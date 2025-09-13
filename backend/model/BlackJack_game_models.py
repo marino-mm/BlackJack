@@ -129,7 +129,7 @@ class Hand:
         print(self.cards)
 
     def json_hand(self):
-        return [card.json_card() for card in self.cards]
+        return {"cards": [card.json_card() for card in self.cards], "isActiveHand": False}
 
     def get_partial_hand_str(self):
         return f"{[self.cards[0], '?']}"
@@ -230,7 +230,7 @@ class House(BasePlayer):
         print(f"House :{[self.hands[0].cards[0], '?']}")
 
     def partial_hand_json(self):
-        return [[self.hands[0].cards[0].json_card(), {"rank": "?", "suit": None}]]
+        return [{"cards": [self.hands[0].cards[0].json_card(), {"rank": "?", "suit": None}]}]
 
 
 class Game:

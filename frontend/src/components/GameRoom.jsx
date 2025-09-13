@@ -3,10 +3,18 @@ import useWebSocket, {ReadyState} from "react-use-websocket";
 
 
 function GameRoom() {
-    const [house, setHouse] = useState({name: "House",hands: [[]]})
-    const [tableSlots, setTableSlots] = useState(new Array(5).fill({name: "Empty", hands: [[]]}))
+    const [house, setHouse] = useState({name: "House", hands: [{cards: []}]})
+    //const [tableSlots, setTableSlots] = useState(new Array(5).fill({name: "Empty", hands: [{cards: []}]}))
+    const [tableSlots, setTableSlots] = useState(() =>
+        Array.from({length: 5}, () => ({
+            name: "Empty",
+            hands: [{cards: []}]
+        }))
+    );
 
     const [username, setUsername] = useState('Test' + '_' + createRandomString(5))
+
+    const [isYourTurn, setTurn] = useState(false)
 
     function createRandomString(length) {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -18,7 +26,7 @@ function GameRoom() {
     }
 
 
-    const dev = false
+    const dev = true
     let wsUrl = null
     if (dev) {
         wsUrl = "http://localhost:8000/game/ws";
@@ -55,7 +63,7 @@ function GameRoom() {
             }
             if (lastJsonMessage.messageType === 'UpdateSlots') {
                 const new_slots = lastJsonMessage.slot_list.map(slot => {
-                    return slot === null ? {name: "Empty", hands: [[]]} : slot
+                    return slot === null ? {name: "Empty", hands: [{cards: []}]} : slot
                 })
                 console.log(new_slots)
                 setTableSlots(new_slots)
@@ -64,6 +72,14 @@ function GameRoom() {
                 const new_house_hand = {...house, hands: lastJsonMessage.houseHand}
                 console.log(new_house_hand)
                 setHouse(new_house_hand)
+            }
+            if (lastJsonMessage.messageType === 'UpdateActivPlayer') {
+                if (username === lastJsonMessage.activ_player_username){
+                    setTurn(true)
+                }
+                else{
+                    setTurn(false)
+                }
             }
         }
 
@@ -92,7 +108,7 @@ function GameRoom() {
                                  onClick={() => change_seat({slot_index: index})}/>))}
 
             </div>
-            <ActionBar send_action={send_action}></ActionBar>
+            <ActionBar send_action={send_action} isYourTurn={isYourTurn}></ActionBar>
         </div>
     )
 }
@@ -114,18 +130,29 @@ function PlayerHands({player, onClick}) {
 }
 
 function Hand({hand}) {
-    return (
-        <div className="border-1 border-b-amber-950 flex flex-wrap m-1">
-            {hand.map((card, index) =>
+    return  hand.isActiveHand? (
+        <div className="border-3 border-red-600 flex flex-wrap m-1">
+            {hand.cards.map((card, index) =>
+                <Card key={index} rank={card.rank} suit={card.suit} isActiveHand={hand.isActiveHand}/>
+            )}
+        </div>
+    ) : (
+        <div className="border-1 border-amber-950 flex flex-wrap m-1">
+            {hand.cards.map((card, index) =>
                 <Card key={index} rank={card.rank} suit={card.suit}/>
             )}
         </div>
     )
 }
 
-function Card({rank, suit}) {
+function Card({rank, suit, isActiveHand}) {
 
-    return (
+    return isActiveHand? (
+        <div className="flex items-center gap-1 border border-rose-200 px-2 py-1 rounded w-max text-sm m-1">
+            <p className="">{rank}</p>
+            <p className="">{suit}</p>
+        </div>
+    ) : (
         <div className="flex items-center gap-1 border border-b-rose-200 px-2 py-1 rounded w-max text-sm m-1">
             <p>{rank}</p>
             <p>{suit}</p>
@@ -133,17 +160,14 @@ function Card({rank, suit}) {
     )
 }
 
-function ActionBar({send_action}) {
+function ActionBar({send_action, isYourTurn}) {
     const buttonStyles = "border-4 border-gray-400\n" +
         "    py-2 px-4 rounded\n" +
         "    disabled:pointer-events-none\n" +
         "    disabled:opacity-50 disabled:cursor-not-allowed\n" +
         "    disabled:hover:bg-transparent"
-    const [isYourTurn, setTurn] = useState(true)
 
-    const switchTurn = () => {
-        setTurn(!isYourTurn)
-    }
+
 
     return (
         <>
@@ -161,7 +185,6 @@ function ActionBar({send_action}) {
                         disabled={!isYourTurn}>Split
                 </button>
             </div>
-            <button onClick={switchTurn}>Switch</button>
             <p>{isYourTurn ? ("It is your turn.") : ("It is not your turn.")}</p>
         </>
     )
