@@ -1,5 +1,5 @@
-import {Fragment, useContext, useEffect, useRef, useState} from 'react'
-import useWebSocket, {ReadyState} from "react-use-websocket";
+import { useEffect, useRef, useState } from 'react';
+import useWebSocket, { ReadyState } from "react-use-websocket";
 
 
 function GameRoom() {
@@ -97,6 +97,7 @@ function GameRoom() {
 
     return (
         <div>
+            <RoundInformation></RoundInformation>
             <div className="grid w-full grid-cols-5 grid-rows-2 border-4 border-blue-400 gap-4 p-5">
                 <div className="col-span-5 flex flex-col border-4 border-red-500 min-h-10 justify-center items-center">
                     <PlayerHands player={house}/>
@@ -185,7 +186,36 @@ function ActionBar({send_action, isYourTurn}) {
                         disabled={!isYourTurn}>Split
                 </button>
             </div>
-            <p>{isYourTurn ? ("It is your turn.") : ("It is not your turn.")}</p>
+            {/* <p>{isYourTurn ? ("It is your turn.") : ("It is not your turn.")}</p> */}
         </>
+    )
+}
+
+function RoundInformation(){
+
+    const [eventName, setEventName] = useState("Waiting for players to take a slot");
+    const [countdownStarted, setCountdownStarted] = useState(false);
+    const [timeRemaining, setTimeRemaining] = useState();
+
+    useEffect(() =>{
+            const countdownId =  setInterval(() =>{
+                if (timeRemaining > 0 && countdownStarted){
+                    const newTimeRemaining = timeRemaining - 1
+                    setTimeRemaining(newTimeRemaining)
+                }
+            }, 1000)
+            return () => clearInterval(countdownId)
+        }
+    )
+
+    return (
+        <div className='border-2 border-green-500 p-1'>
+            <div className='text-4xl m-1'>{eventName}</div>
+            <div className='text-4xl m-1'>
+                {timeRemaining === undefined
+                    ? '' 
+                    : `Time remaining: ${timeRemaining}`}
+            </div>
+        </div>
     )
 }

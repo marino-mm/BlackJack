@@ -195,6 +195,14 @@ class GameTable:
         }
         await self.send_json_to_all(data)
 
+    async def send_timer_reset(self, time = 30, start_running= False):
+        data = {
+            "messageType": "UpdateTimerReset",
+            "time": time,
+            "start_running": start_running,
+        }
+        await self.send_json_to_all(data)
+
     async def start_game(self):
         print("Game started")
         while True:
