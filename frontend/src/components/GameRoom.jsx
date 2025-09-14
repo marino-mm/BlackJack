@@ -26,7 +26,7 @@ function GameRoom() {
     }
 
 
-    const dev = true
+    const dev = false
     let wsUrl = null
     if (dev) {
         wsUrl = "http://localhost:8000/game/ws";
