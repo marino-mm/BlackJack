@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
 
+from backend.subapp.BlackJack_app import BlackJackGame, BlackJack
 from subapp.main import game_app
 
 app = FastAPI()
@@ -127,7 +128,8 @@ def heart_bet():
     return Response()
 
 
-app.mount("/game", game_app)
+# app.mount("/game", game_app)
+app.mount("/game", BlackJack)
 
 # app.mount("/vanilla_js", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="vanilla_static")
 # app.mount("/", StaticFiles(directory=FRONTEND_DIST, html=True, check_dir=True), name="static")
