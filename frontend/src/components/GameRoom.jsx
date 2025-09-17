@@ -26,10 +26,10 @@ function GameRoom() {
     }
 
 
-    const dev = false
+    const dev = true
     let wsUrl = null
     if (dev) {
-        wsUrl = "http://localhost:8000/game/ws";
+        wsUrl = "http://localhost:8080/game/ws";
     } else {
         const loc = window.location;
         const wsProtocol = loc.protocol === "https:" ? "wss" : "ws";
