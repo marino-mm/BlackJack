@@ -5,7 +5,7 @@ from typing import Any, List
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from backend.model.BlackJack_game_models import Hand, Card, House
+from ..model.BlackJack_game_models import Hand, Card, House
 
 BlackJack = FastAPI()
 
@@ -30,7 +30,6 @@ class BlackJackPlayer:
         self.game = game
         self.worker_task = asyncio.create_task(self.start_worker())
         self.ping_pong_task = asyncio.create_task(self.websocket_ping_pong())
-        await self.ping_pong_task
 
     async def start_worker(self):
         try:
@@ -74,20 +73,40 @@ class BlackJackGame:
         self.sitting_players: List[BlackJackPlayer] = []
         self.game_queue = PriorityQueue(100)
         self.House = House()
-        self.worker: Task | Any = None
+        self.worker_task: Task | Any = None
+        self.count_down_time = 30
+        self.count_down_task: Task | Any = None
 
-    async def worker(self):
+    async def queue_worker(self):
         while True:
             message_dict = await self.game_queue.get()
             print(message_dict)
 
+    async def count_down_worker(self):
+        print("Counting down started")
+        while self.count_down_time > 0:
+            print(self.count_down_time)
+            await asyncio.sleep(1)
+            self.count_down_time -= 1
+            for player in self.all_players:
+                data = {
+                    "messageType": "UpdateCountdownTime",
+                    "timeRemaining": self.count_down_time,
+                }
+                await player.ws.send_json(data)
+        else:
+            self.count_down_time = 30
+            return
 
     async def add_player(self, player: BlackJackPlayer):
-        pass
+        self.all_players.append(player)
+        self.count_down_task = asyncio.create_task(self.count_down_worker())
 
     async def remove_player(self, player: BlackJackPlayer):
-        # self.all_players.remove(player)
-        pass
+        self.all_players.remove(player)
+        if len(self.all_players) == 0:
+            print("canceling countdown task")
+            self.count_down_task.cancel()
 
 
 
@@ -99,6 +118,9 @@ async def websocket_endpoint(ws: WebSocket):
         await ws.accept()
         blackjack_player = BlackJackPlayer(ws)
         await blackjack_player.player_creation(game)
+        await game.add_player(blackjack_player)
+        
+        await blackjack_player.ping_pong_task
     except Exception as e:
         await blackjack_player.disconnect_player()
         print(f"Exception happened in websocket_endpoint, exception: {e}")

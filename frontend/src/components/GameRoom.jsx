@@ -11,11 +11,8 @@ function GameRoom() {
             hands: [{cards: []}]
         }))
     );
-
     const [username, setUsername] = useState('Test' + '_' + createRandomString(5))
-
     const [isYourTurn, setTurn] = useState(false)
-
     function createRandomString(length) {
         const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         let result = "";
@@ -25,6 +22,8 @@ function GameRoom() {
         return result;
     }
 
+    const [eventName, setEventName] = useState("Waiting for players to take a slot");
+    const [timeRemaining, setTimeRemaining] = useState();
 
     const dev = true
     let wsUrl = null
@@ -81,6 +80,11 @@ function GameRoom() {
                     setTurn(false)
                 }
             }
+            if (lastJsonMessage.messageType === 'UpdateCountdownTime') {
+                // setEventName(lastJsonMessage.eventName)
+                setTimeRemaining(lastJsonMessage.timeRemaining)
+            }
+            console.log(lastJsonMessage)
         }
 
     }, [lastJsonMessage, sendJsonMessage])
@@ -97,7 +101,7 @@ function GameRoom() {
 
     return (
         <div>
-            <RoundInformation></RoundInformation>
+            <RoundInformation eventName={eventName} timeRemaining={timeRemaining}></RoundInformation>
             <div className="grid w-full grid-cols-5 grid-rows-2 border-4 border-blue-400 gap-4 p-5">
                 <div className="col-span-5 flex flex-col border-4 border-red-500 min-h-10 justify-center items-center">
                     <PlayerHands player={house}/>
@@ -191,22 +195,7 @@ function ActionBar({send_action, isYourTurn}) {
     )
 }
 
-function RoundInformation(){
-
-    const [eventName, setEventName] = useState("Waiting for players to take a slot");
-    const [countdownStarted, setCountdownStarted] = useState(false);
-    const [timeRemaining, setTimeRemaining] = useState();
-
-    useEffect(() =>{
-            const countdownId =  setInterval(() =>{
-                if (timeRemaining > 0 && countdownStarted){
-                    const newTimeRemaining = timeRemaining - 1
-                    setTimeRemaining(newTimeRemaining)
-                }
-            }, 1000)
-            return () => clearInterval(countdownId)
-        }
-    )
+function RoundInformation({timeRemaining, eventName}){
 
     return (
         <div className='border-2 border-green-500 p-1'>
