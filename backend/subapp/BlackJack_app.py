@@ -1,16 +1,17 @@
 import asyncio
 from asyncio import Queue, Task, PriorityQueue, CancelledError
-from typing import Any, List
+from typing import Any, List, Set, Optional
 
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from ..model.BlackJack_game_models import Hand, Card, House
+from backend.model.BlackJack_game_models import Hand, Card, House, Player
 
 BlackJack = FastAPI()
 
-class BlackJackPlayer:
+class BlackJackPlayer(Player):
     def __init__(self, ws: WebSocket):
+        super().__init__()
         self.player_name = ''
         self.ws: WebSocket | Any = ws
         self.action_queue = Queue(10)
@@ -19,7 +20,16 @@ class BlackJackPlayer:
         self.game = None
         self.worker_task: Task | Any = None
         self.ping_pong_task: Task | Any = None
-        self.hands: List[Hand] | List[List[Card]] = []
+        self.player_status: str = 'Connected'
+
+    def __hash__(self):
+        return hash(self.player_name)
+
+    def __eq__(self, other):
+        if isinstance(other, BlackJackPlayer):
+            return self.player_name == other.player_name
+        else:
+            return False
 
     async def player_creation(self, game):
         while not self.player_name:
@@ -38,6 +48,7 @@ class BlackJackPlayer:
                 if message_dict.get("messageType") == "PingPong":
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
+                    message_dict["player"] = self
                     self.game.game_queue.put_nowait(message_dict)
         except WebSocketDisconnect as e:
             print(f"Player {self.player_name} was disconnected")
@@ -49,7 +60,7 @@ class BlackJackPlayer:
         try:
             while True:
                 await asyncio.sleep(5)
-                await self.ws.send_json({"messageType": "PingPong", "message": "Ping"})
+                await self.ws.send_json({"PingPong": "Ping"})
                 try:
                     message = await asyncio.wait_for(self.ping_pong_queue.get(), timeout=5)
                 except asyncio.TimeoutError:
@@ -60,67 +71,151 @@ class BlackJackPlayer:
             print(f"{self.player_name} disconnected due to missing Pong.")
             await self.disconnect_player()
         except CancelledError:
-            print(f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled.")
+            print(
+                f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled.")
 
     async def disconnect_player(self):
-        self.worker_task.cancel()
-        self.ping_pong_task.cancel()
-        await self.game.remove_player(self)
+        if self.player_status == "Connected":
+            try:
+                if self.worker_task:
+                    self.worker_task.cancel()
+                if self.ping_pong_task:
+                    self.ping_pong_task.cancel()
+                await self.game.remove_player(self)
+            except CancelledError:
+                print(f"Worker task and ping_pong_task were cancelled")
+            except Exception as e:
+                print(f"Error happened in disconnect_player method. Error: {e}")
+
+        self.player_status = "Disconnected"
 
 class BlackJackGame:
     def __init__(self):
-        self.all_players:List[BlackJackPlayer] = []
-        self.sitting_players: List[BlackJackPlayer] = []
+        self.all_players: List[BlackJackPlayer] = []
+        self.sitting_players: List[Optional[BlackJackPlayer]] = [None for _ in range(5)]
         self.game_queue = PriorityQueue(100)
-        self.House = House()
+        self.house = House()
+        self.active_player: BlackJackPlayer = None
         self.worker_task: Task | Any = None
         self.count_down_time = 30
         self.count_down_task: Task | Any = None
+        self.running_tasks: Set[Task] = set()
+        self.game_status = "Waiting"
 
     async def queue_worker(self):
         while True:
             message_dict = await self.game_queue.get()
-            print(message_dict)
+            if self.game_status == "Player_move_phase":
+                if message_dict.get("new_slot_index") is not None:
+                    self.move_slot(message_dict)
+                    await self.send_data_to_all_players(self.send_slots())
+
+
+    def move_slot(self, message):
+        user: BlackJackPlayer = message.get("player")
+        new_slot = message.get("new_slot_index")
+        try:
+            old_index = self.sitting_players.index(user)
+        except ValueError:
+            old_index = None
+        target_slot = self.sitting_players[new_slot]
+        if target_slot is None:
+            self.sitting_players[new_slot] = user
+            if old_index is not None:
+                self.sitting_players[old_index] = None
 
     async def count_down_worker(self):
-        print("Counting down started")
         while self.count_down_time > 0:
-            print(self.count_down_time)
             await asyncio.sleep(1)
             self.count_down_time -= 1
-            for player in self.all_players:
-                data = {
-                    "messageType": "UpdateCountdownTime",
-                    "timeRemaining": self.count_down_time,
-                }
-                await player.ws.send_json(data)
+            data = {"timeRemaining": self.count_down_time}
+            await self.send_data_to_all_players(data)
         else:
-            self.count_down_time = 30
             return
+
+    async def send_data_to_all_players(self, data):
+        for player in self.all_players:
+            await player.ws.send_json(data)
+
+    async def start_count_down(self, time: int):
+        self.count_down_time = time
+        if not self.count_down_task:
+            self.count_down_task = asyncio.create_task(self.count_down_worker(), name="count_down_task")
+            self.running_tasks.add(self.count_down_task)
+
+    async def stop_count_down(self):
+        try:
+            self.count_down_time = 0
+            self.running_tasks.remove(self.count_down_task)
+            self.count_down_task.cancel()
+        except asyncio.CancelledError:
+            pass
 
     async def add_player(self, player: BlackJackPlayer):
         self.all_players.append(player)
-        self.count_down_task = asyncio.create_task(self.count_down_worker())
+        if self.game_status == "Running":
+            await self.send_data_to_all_players(self.send_slots())
+        else:
+            self.game_status = "Running"
+            self.worker_task = asyncio.create_task(self.queue_worker(), name="game_queue_worker")
+            self.running_tasks.add(self.worker_task)
+            await self.players_move_phase()
 
     async def remove_player(self, player: BlackJackPlayer):
         self.all_players.remove(player)
         if len(self.all_players) == 0:
             print("canceling countdown task")
-            self.count_down_task.cancel()
+            self.game_status = "Waiting"
+            for running_task in self.running_tasks:
+                print(running_task.get_name())
+                running_task.cancel()
 
+    async def send_round_title(self, round_title: str):
+        await self.send_data_to_all_players({"eventName": round_title})
 
+    async def players_move_phase(self):
+        self.game_status = "Player_move_phase"
+        for player in self.all_players:
+            player.send_to_parent = True
+        await self.send_round_title("Moving places and betting time")
+        await self.start_count_down(10)
+
+    @staticmethod
+    def frontend_dict(player:BlackJackPlayer) -> dict:
+        return {"name": player.player_name, "hands": player.hands_json()}
+
+    def send_slots(self):
+        return {
+            "slot_list": [
+                self.frontend_dict(x) if x is not None else None for x in self.sitting_players
+            ],
+        }
+
+    async def players_action_phase(self):
+        for player in self.sitting_players:
+            self.active_player = player
+            await self.send_data_to_all_players({"activ_player_username": self.active_player.player_name})
+            active_hand_index = 0
+            while active_hand_index < len(player.hands):
+                active_hand = player.hands[active_hand_index]
+                active_hand.is_active_hand = True
+                await self.send_data_to_all_players(self.send_slots())
 
 game = BlackJackGame()
 
 @BlackJack.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
+    blackjack_player = None
     try:
         await ws.accept()
         blackjack_player = BlackJackPlayer(ws)
         await blackjack_player.player_creation(game)
         await game.add_player(blackjack_player)
-        
+
         await blackjack_player.ping_pong_task
+    except CancelledError:
+        print(f"Cancelled Error in websocket_endpoint")
     except Exception as e:
-        await blackjack_player.disconnect_player()
-        print(f"Exception happened in websocket_endpoint, exception: {e}")
+        if blackjack_player:
+            await blackjack_player.disconnect_player()
+            print(f"Exception happened in websocket_endpoint, exception: {e}")

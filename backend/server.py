@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.websockets import WebSocketDisconnect
 
-from .subapp.BlackJack_app import BlackJack
+from backend.subapp.BlackJack_app import BlackJack
 
 app = FastAPI()
 

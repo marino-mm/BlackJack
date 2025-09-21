@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import useWebSocket, { ReadyState } from "react-use-websocket";
+import * as grus from '../classes/GameRoomUpdateStrategeis'
 
 
 function GameRoom() {
     const [house, setHouse] = useState({name: "House", hands: [{cards: []}]})
-    //const [tableSlots, setTableSlots] = useState(new Array(5).fill({name: "Empty", hands: [{cards: []}]}))
     const [tableSlots, setTableSlots] = useState(() =>
         Array.from({length: 5}, () => ({
             name: "Empty",
@@ -53,50 +53,42 @@ function GameRoom() {
         }
     }, [readyState]);
 
+    const strategyContext = {
+        setTableSlots,
+        setTimeRemaining,
+        setEventName,
+        setHouse,
+        setTurn,
+        sendJsonMessage
+    };
+
+    const strategyList = [
+        new grus.PingPongStrategy(strategyContext),
+        new grus.UpdateSlotStrategy(strategyContext),
+        new grus.UpdateCountdownTimer(strategyContext),
+        new grus.UpdateGameState(strategyContext),
+        new grus.UpdateHouseHand(strategyContext),
+        new grus.UpdateActivePlayer(strategyContext)
+    ]
+
     useEffect(() => {
         if (lastJsonMessage) {
-            // console.log(lastJsonMessage)
-            if (lastJsonMessage.messageType === 'PingPong') {
-                sendJsonMessage({'messageType': "PingPong", 'message': 'Pong'})
-                // console.log('Pong Sent')
-            }
-            if (lastJsonMessage.messageType === 'UpdateSlots') {
-                const new_slots = lastJsonMessage.slot_list.map(slot => {
-                    return slot === null ? {name: "Empty", hands: [{cards: []}]} : slot
-                })
-                console.log(new_slots)
-                setTableSlots(new_slots)
-            }
-            if (lastJsonMessage.messageType === 'UpdateHouse') {
-                const new_house_hand = {...house, hands: lastJsonMessage.houseHand}
-                console.log(new_house_hand)
-                setHouse(new_house_hand)
-            }
-            if (lastJsonMessage.messageType === 'UpdateActivPlayer') {
-                if (username === lastJsonMessage.activ_player_username){
-                    setTurn(true)
-                }
-                else{
-                    setTurn(false)
+            for (const strategy of strategyList) {
+                if (strategy.is_applicable(lastJsonMessage)) {
+                    strategy.update(lastJsonMessage);
                 }
             }
-            if (lastJsonMessage.messageType === 'UpdateCountdownTime') {
-                // setEventName(lastJsonMessage.eventName)
-                setTimeRemaining(lastJsonMessage.timeRemaining)
-            }
-            console.log(lastJsonMessage)
         }
-
     }, [lastJsonMessage, sendJsonMessage])
 
     const send_action = ({action}) => {
         const message = {'messageType': "Action", 'message': action}
         sendJsonMessage(message)
-        //console.log(`Send_action: ${JSON.stringify(message)}`)
     }
 
     const change_seat = ({slot_index}) => {
         sendJsonMessage({'messageType': "MoveSlot", 'new_slot_index': slot_index})
+        console.log({'messageType': "MoveSlot", 'new_slot_index': slot_index})
     }
 
     return (

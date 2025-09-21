@@ -112,6 +112,7 @@ class Hand:
         self.cards: List[Card] = []
         self.hand_value = 0
         self.hand_status = "PLAYING"
+        self.is_active_hand = False
 
     def __str__(self) -> str:
         return f"{self.cards}, Value :{self.hand_value})"
@@ -129,7 +130,7 @@ class Hand:
         print(self.cards)
 
     def json_hand(self):
-        return {"cards": [card.json_card() for card in self.cards], "isActiveHand": False}
+        return {"cards": [card.json_card() for card in self.cards], "isActiveHand": self.is_active_hand}
 
     def get_partial_hand_str(self):
         return f"{[self.cards[0], '?']}"
