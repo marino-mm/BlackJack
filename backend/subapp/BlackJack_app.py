@@ -5,9 +5,10 @@ from typing import Any, List, Set, Optional
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from backend.model.BlackJack_game_models import Hand, Card, House, Player
+from backend.model.BlackJack_game_models import Deck, Hand, Card, House, Player
 
 BlackJack = FastAPI()
+
 
 class BlackJackPlayer(Player):
     def __init__(self, ws: WebSocket):
@@ -49,12 +50,14 @@ class BlackJackPlayer(Player):
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
                     message_dict["player"] = self
-                    self.game.game_queue.put_nowait(message_dict)
+                    if self.game:
+                        self.game.game_queue.put_nowait(message_dict)
         except WebSocketDisconnect as e:
             print(f"Player {self.player_name} was disconnected")
             await self.disconnect_player()
         except Exception as e:
-            print(f"Exception happened in player {self.player_name}, exception: {e}")
+            print(
+                f"Exception happened in player {self.player_name}, exception: {e}")
 
     async def websocket_ping_pong(self):
         try:
@@ -81,35 +84,88 @@ class BlackJackPlayer(Player):
                     self.worker_task.cancel()
                 if self.ping_pong_task:
                     self.ping_pong_task.cancel()
-                await self.game.remove_player(self)
+                if self.game:
+                    await self.game.remove_player(self)
             except CancelledError:
                 print(f"Worker task and ping_pong_task were cancelled")
             except Exception as e:
-                print(f"Error happened in disconnect_player method. Error: {e}")
+                print(
+                    f"Error happened in disconnect_player method. Error: {e}")
 
         self.player_status = "Disconnected"
+
 
 class BlackJackGame:
     def __init__(self):
         self.all_players: List[BlackJackPlayer] = []
-        self.sitting_players: List[Optional[BlackJackPlayer]] = [None for _ in range(5)]
+        self.sitting_players: List[Optional[BlackJackPlayer]] = [
+            None for _ in range(5)]
         self.game_queue = PriorityQueue(100)
         self.house = House()
-        self.active_player: BlackJackPlayer = None
+        self.deck = Deck()
+        self.active_player: Optional[BlackJackPlayer] = None
+        self.active_hand: Optional[Hand] = None
+        self.active_hand_index: int = -1
+        self.active_player_index: int = -1
         self.worker_task: Task | Any = None
         self.count_down_time = 30
         self.count_down_task: Task | Any = None
         self.running_tasks: Set[Task] = set()
-        self.game_status = "Waiting"
+        self.game_status = "waiting"
 
-    async def queue_worker(self):
+    async def player_move_worker(self):
         while True:
             message_dict = await self.game_queue.get()
-            if self.game_status == "Player_move_phase":
+            if self.game_status == "player_move_phase":
                 if message_dict.get("new_slot_index") is not None:
                     self.move_slot(message_dict)
                     await self.send_data_to_all_players(self.send_slots())
 
+    async def player_action_worker(self):
+        while True:
+            message_dict = await self.game_queue.get()
+            if self.game_status == "player_action_phase":
+                if message_dict.get("user", None) == self.active_player:
+                    valid_move = await self.poccess_players_move(message_dict)
+                    if valid_move:
+                        await self.send_data_to_all_players(self.send_slots())
+                        return True
+
+    async def poccess_players_move(self, message_dict):
+        if message_dict.get("messageType", '') == 'Action' and (action := message_dict.get("message", None)):
+            if action == 'hit':
+                self.active_hand.add_card(self.deck.get_card())
+                if self.active_hand.is_busted:
+                    next_active_hand()
+
+    def next_active_hand(self):
+        self.active_hand_index += 1
+        if self.active_hand_index < len(self.active_player.hands):  # type: ignore
+            return
+        else:
+            self.active_player_index += 1
+            new_activ_player = self.sitting_players[self.active_player_index]
+            if not new_activ_player:
+                self.game_status = "end_phase"
+                self.active_player = None
+                self.active_hand = None
+                self.active_hand_index = -1
+                self.active_player_index = -1
+            else:
+                self.active_player = new_activ_player
+
+    async def game_round(self):
+        while True:
+            self.game_status = 'waiting'
+
+            self.game_status = 'player_move_phase'
+
+            self.game_status = 'player_action_phase'
+
+            self.game_status = 'end_phase'
+            if not self.count_down_task:
+                self.count_down_task = asyncio.create_task(
+                    self.count_down_worker())
 
     def move_slot(self, message):
         user: BlackJackPlayer = message.get("player")
@@ -140,7 +196,8 @@ class BlackJackGame:
     async def start_count_down(self, time: int):
         self.count_down_time = time
         if not self.count_down_task:
-            self.count_down_task = asyncio.create_task(self.count_down_worker(), name="count_down_task")
+            self.count_down_task = asyncio.create_task(
+                self.count_down_worker(), name="count_down_task")
             self.running_tasks.add(self.count_down_task)
 
     async def stop_count_down(self):
@@ -153,11 +210,12 @@ class BlackJackGame:
 
     async def add_player(self, player: BlackJackPlayer):
         self.all_players.append(player)
-        if self.game_status == "Running":
+        if self.game_status != "waiting":
             await self.send_data_to_all_players(self.send_slots())
         else:
             self.game_status = "Running"
-            self.worker_task = asyncio.create_task(self.queue_worker(), name="game_queue_worker")
+            self.worker_task = asyncio.create_task(
+                self.queue_worker(), name="game_queue_worker")
             self.running_tasks.add(self.worker_task)
             await self.players_move_phase()
 
@@ -165,7 +223,7 @@ class BlackJackGame:
         self.all_players.remove(player)
         if len(self.all_players) == 0:
             print("canceling countdown task")
-            self.game_status = "Waiting"
+            self.game_status = "waiting"
             for running_task in self.running_tasks:
                 print(running_task.get_name())
                 running_task.cancel()
@@ -174,34 +232,35 @@ class BlackJackGame:
         await self.send_data_to_all_players({"eventName": round_title})
 
     async def players_move_phase(self):
-        self.game_status = "Player_move_phase"
+        self.game_status = "player_move_phase"
         for player in self.all_players:
             player.send_to_parent = True
         await self.send_round_title("Moving places and betting time")
         await self.start_count_down(10)
 
     @staticmethod
-    def frontend_dict(player:BlackJackPlayer) -> dict:
+    def frontend_dict(player: BlackJackPlayer) -> dict:
         return {"name": player.player_name, "hands": player.hands_json()}
 
     def send_slots(self):
         return {
-            "slot_list": [
-                self.frontend_dict(x) if x is not None else None for x in self.sitting_players
-            ],
+            "slot_list": [self.frontend_dict(x) if x is not None else None for x in self.sitting_players],
         }
 
     async def players_action_phase(self):
         for player in self.sitting_players:
             self.active_player = player
+            # type: ignore
             await self.send_data_to_all_players({"activ_player_username": self.active_player.player_name})
             active_hand_index = 0
-            while active_hand_index < len(player.hands):
-                active_hand = player.hands[active_hand_index]
+            while active_hand_index < len(player.hands):  # type: ignore
+                active_hand = player.hands[active_hand_index]  # type: ignore
                 active_hand.is_active_hand = True
                 await self.send_data_to_all_players(self.send_slots())
 
+
 game = BlackJackGame()
+
 
 @BlackJack.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
