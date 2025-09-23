@@ -1,5 +1,6 @@
 import asyncio
 from asyncio import Queue, Task, PriorityQueue, CancelledError
+from functools import partial
 from typing import Any, List, Set, Optional
 
 from fastapi import FastAPI
@@ -98,8 +99,7 @@ class BlackJackPlayer(Player):
 class BlackJackGame:
     def __init__(self):
         self.all_players: List[BlackJackPlayer] = []
-        self.sitting_players: List[Optional[BlackJackPlayer]] = [
-            None for _ in range(5)]
+        self.sitting_players: List[Optional[BlackJackPlayer]] = [None for _ in range(5)]
         self.game_queue = PriorityQueue(100)
         self.house = House()
         self.deck = Deck()
@@ -136,29 +136,16 @@ class BlackJackGame:
             if action == 'hit':
                 self.active_hand.add_card(self.deck.get_card())
                 if self.active_hand.is_busted:
-                    next_active_hand()
-
-    def next_active_hand(self):
-        self.active_hand_index += 1
-        if self.active_hand_index < len(self.active_player.hands):  # type: ignore
-            return
-        else:
-            self.active_player_index += 1
-            new_activ_player = self.sitting_players[self.active_player_index]
-            if not new_activ_player:
-                self.game_status = "end_phase"
-                self.active_player = None
-                self.active_hand = None
-                self.active_hand_index = -1
-                self.active_player_index = -1
-            else:
-                self.active_player = new_activ_player
+                    pass
 
     async def game_round(self):
         while True:
-            self.game_status = 'waiting'
+            if self.game_status == 'waiting':
+                pass
 
-            self.game_status = 'player_move_phase'
+            if self.game_status == 'player_move_phase':
+                await self.start_player_move_phase()
+            
 
             self.game_status = 'player_action_phase'
 
@@ -166,6 +153,19 @@ class BlackJackGame:
             if not self.count_down_task:
                 self.count_down_task = asyncio.create_task(
                     self.count_down_worker())
+
+    async def start_player_move_phase(self):
+        for player in self.all_players:
+            player.send_to_parent = True
+        await self.send_round_title("Moving places and betting time")
+        self.count_down_time = 30
+        player_move_task = asyncio.create_task(self.player_move_worker())
+        count_down_task = asyncio.create_task(self.count_down_worker())
+        done, pending = await asyncio.wait([player_move_task, count_down_task], timeout=60, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        for player in self.all_players:
+            player.send_to_parent = False
 
     def move_slot(self, message):
         user: BlackJackPlayer = message.get("player")
@@ -187,7 +187,7 @@ class BlackJackGame:
             data = {"timeRemaining": self.count_down_time}
             await self.send_data_to_all_players(data)
         else:
-            return
+            return "Countdown done"
 
     async def send_data_to_all_players(self, data):
         for player in self.all_players:
@@ -230,13 +230,6 @@ class BlackJackGame:
 
     async def send_round_title(self, round_title: str):
         await self.send_data_to_all_players({"eventName": round_title})
-
-    async def players_move_phase(self):
-        self.game_status = "player_move_phase"
-        for player in self.all_players:
-            player.send_to_parent = True
-        await self.send_round_title("Moving places and betting time")
-        await self.start_count_down(10)
 
     @staticmethod
     def frontend_dict(player: BlackJackPlayer) -> dict:
