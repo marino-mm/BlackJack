@@ -139,12 +139,16 @@ class BlackJackGame:
         await self.send_game_title()
 
         self.count_down_time = 30
+        for player in self.all_players:
+            player.send_to_parent = True
         count_down_task = ct(self.count_down_task(), name="count_down_task")
         game_moving_task = ct(self.player_move_task(), name="game_moving_task")
         self.running_tasks.add(count_down_task)
         self.running_tasks.add(game_moving_task)
 
         done, pending = await asyncio.wait([count_down_task, game_moving_task], return_when="FIRST_COMPLETED")
+        for player in self.all_players:
+            player.send_to_parent = True
         for temp in done:
             self.running_tasks.remove(temp)
         for temp in pending:
@@ -157,6 +161,7 @@ class BlackJackGame:
             self.sitting_players) if x is not None]
         for activ_player in sitting_players_reduced:
             self.active_player = activ_player
+            self.active_player.send_to_parent = True
             self.game_title = f"{activ_player.player_name}'s turn"
             await self.send_game_title()
             await self.send_active_player()
@@ -184,6 +189,8 @@ class BlackJackGame:
                     self.running_tasks.remove(temp)
 
                 self.active_hand_index += 1
+
+            self.active_player.send_to_parent = False
 
     async def player_move_task(self):
         while True:
@@ -219,19 +226,6 @@ class BlackJackGame:
                 self.active_player.split_hand(  # type: ignore
                     self.active_hand, self.deck.get_card())  # type: ignore
 
-    async def start_player_move_phase(self):
-        for player in self.all_players:
-            player.send_to_parent = True
-        await self.send_round_title("Moving places and betting time")
-        self.count_down_time = 30
-        player_move_task = asyncio.create_task(self.player_move_worker())
-        count_down_task = asyncio.create_task(self.count_down_worker())
-        done, pending = await asyncio.wait([player_move_task, count_down_task], timeout=60, return_when=asyncio.FIRST_COMPLETED)
-        for task in pending:
-            task.cancel()
-        for player in self.all_players:
-            player.send_to_parent = False
-
     def move_slot(self, message):
         user: BlackJackPlayer = message.get("player")
         new_slot = message.get("new_slot_index")
@@ -264,14 +258,6 @@ class BlackJackGame:
             self.count_down_worker = ct(
                 self.count_down_worker(), name="count_down_task")
             self.running_tasks.add(self.count_down_worker)
-
-    async def stop_count_down(self):
-        try:
-            self.count_down_time = 0
-            self.running_tasks.remove(self.count_down_task)
-            self.count_down_task.cancel()
-        except asyncio.CancelledError:
-            pass
 
     async def add_player(self, player: BlackJackPlayer):
         self.all_players.append(player)
