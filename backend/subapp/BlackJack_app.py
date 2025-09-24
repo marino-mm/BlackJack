@@ -219,6 +219,19 @@ class BlackJackGame:
                 self.active_player.split_hand(  # type: ignore
                     self.active_hand, self.deck.get_card())  # type: ignore
 
+    async def start_player_move_phase(self):
+        for player in self.all_players:
+            player.send_to_parent = True
+        await self.send_round_title("Moving places and betting time")
+        self.count_down_time = 30
+        player_move_task = asyncio.create_task(self.player_move_worker())
+        count_down_task = asyncio.create_task(self.count_down_worker())
+        done, pending = await asyncio.wait([player_move_task, count_down_task], timeout=60, return_when=asyncio.FIRST_COMPLETED)
+        for task in pending:
+            task.cancel()
+        for player in self.all_players:
+            player.send_to_parent = False
+
     def move_slot(self, message):
         user: BlackJackPlayer = message.get("player")
         new_slot = message.get("new_slot_index")
@@ -239,7 +252,7 @@ class BlackJackGame:
             data = {"timeRemaining": self.count_down_time}
             await self.send_data_to_all_players(data)
         else:
-            return
+            return "Countdown done"
 
     async def send_data_to_all_players(self, data):
         for player in self.all_players:
