@@ -59,7 +59,9 @@ function GameRoom() {
         setEventName,
         setHouse,
         setTurn,
-        sendJsonMessage
+        sendJsonMessage,
+        username,
+        house
     };
 
     const strategyList = [

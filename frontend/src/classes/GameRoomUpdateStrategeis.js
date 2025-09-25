@@ -52,6 +52,7 @@ class UpdateHouseHand extends UpdateStrategy{
         return message.houseHand !== undefined
     }
     update(message){
+        const house = this.context.house
         const new_house_hand = {...house, hands: message.houseHand}
         this.context.setHouse(new_house_hand)
     }
@@ -62,7 +63,7 @@ class UpdateActivePlayer extends UpdateStrategy{
         return message.activ_player_username !== undefined
     }
     update(message){
-        this.context.setTurn(username === message.activ_player_username)
+        this.context.setTurn(this.context.username === message.activ_player_username)
     }
 }
 

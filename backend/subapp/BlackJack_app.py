@@ -116,6 +116,7 @@ class BlackJackGame:
 
         self.count_down_time = 30
         self.count_down_worker: Task | Any = None
+
         self.running_tasks: Set[Task] = set()
 
         self.game_status = "waiting"
@@ -129,16 +130,20 @@ class BlackJackGame:
             self.game_status = 'game_move_phase'
             await self.game_move_phase()
 
+            self.game_status = 'game_deal_phase'
+            await self.game_deal_phase()
+
             self.game_status = 'game_action_phase'
             await self.game_action_phase()
 
             self.game_status = 'end_phase'
+            await self.game_end_phase()
 
     async def game_move_phase(self):
         self.game_title = 'Moving phase'
         await self.send_game_title()
 
-        self.count_down_time = 30
+        self.count_down_time = 5
         for player in self.all_players:
             player.send_to_parent = True
         count_down_task = ct(self.count_down_task(), name="count_down_task")
@@ -155,6 +160,46 @@ class BlackJackGame:
             temp.cancel()
             self.running_tasks.remove(temp)
 
+    async def game_deal_phase(self):
+        self.game_title = "Deal phase"
+        await self.send_game_title()
+        sitting_players_reduced = self.sitting_players.copy()
+        sitting_players_reduced = [x for x in reversed(
+            self.sitting_players) if x is not None]
+
+        for _ in range(2):
+            for player in sitting_players_reduced:
+                if not player:
+                    continue
+                if len(player.hands) == 0:
+                    player.hands.append(Hand())
+                player.hands[0].add_card(self.deck.get_card())
+                await self.send_slots()
+                await asyncio.sleep(0.5)
+
+            self.house.hands[0].add_card(self.deck.get_card())
+            await self.send_house_hand(False)
+            await asyncio.sleep(0.5)
+
+        return
+
+    async def game_end_phase(self):
+        self.game_title = "Game end phase"
+        await self.send_game_title()
+        await self.send_house_hand(True)
+        await asyncio.sleep(5)
+
+        self.house.clear_hands()
+
+        for player in self.sitting_players:
+            if player:
+                player.clear_hands()
+
+        await self.send_slots()
+        await self.send_house_hand(True)
+        await asyncio.sleep(5)
+        return
+
     async def game_action_phase(self):
         sitting_players_reduced = self.sitting_players.copy()
         sitting_players_reduced = [x for x in reversed(
@@ -170,7 +215,7 @@ class BlackJackGame:
             while self.active_hand_index < len(self.active_player.hands):
                 self.active_hand = self.active_player.hands[self.active_hand_index]
                 self.active_hand.is_active_hand = True
-                await self.send_data_to_all_players(self.send_slots())
+                await self.send_slots()
 
                 self.count_down_time = 10
                 count_down_task = ct(self.count_down_task(),
@@ -198,33 +243,37 @@ class BlackJackGame:
             if self.game_status == "game_move_phase":
                 if message_dict.get("new_slot_index") is not None:
                     self.move_slot(message_dict)
-                    await self.send_data_to_all_players(self.send_slots())
+                    await self.send_slots()
 
     async def player_action_task(self):
         while True:
             message_dict = await self.game_queue.get()
             if self.game_status == "game_action_phase":
-                if message_dict.get("user", None) == self.active_player:
+                if message_dict.get("player", None) == self.active_player:
                     valid_move = await self.poccess_players_move(message_dict)
                     if valid_move:
-                        await self.send_data_to_all_players(self.send_slots())
+                        await self.send_slots()
                         return True
 
     async def poccess_players_move(self, message_dict):
         if message_dict.get("messageType", '') == 'Action' and (action := message_dict.get("message", None)):
             if action == 'hit':
                 self.active_hand.add_card(self.deck.get_card())  # type: ignore
+                await self.send_slots()
                 if self.active_hand.is_busted:  # type: ignore
                     return
             if action == 'stand':
+                await self.send_slots()
                 return
             if action == 'double_down':
                 self.active_player.dobule_down_hand(  # type: ignore
                     self.active_hand, self.deck.get_card())  # type: ignore
+                await self.send_slots()
                 return
             if action == 'split':
                 self.active_player.split_hand(  # type: ignore
                     self.active_hand, self.deck.get_card())  # type: ignore
+                await self.send_slots()
 
     def move_slot(self, message):
         user: BlackJackPlayer = message.get("player")
@@ -241,10 +290,10 @@ class BlackJackGame:
 
     async def count_down_task(self):
         while self.count_down_time > 0:
-            await sleep(1)
-            self.count_down_time -= 1
             data = {"timeRemaining": self.count_down_time}
             await self.send_data_to_all_players(data)
+            await sleep(1)
+            self.count_down_time -= 1
         else:
             return "Countdown done"
 
@@ -261,7 +310,12 @@ class BlackJackGame:
 
     async def add_player(self, player: BlackJackPlayer):
         self.all_players.append(player)
-        await self.send_data_to_all_players(self.send_slots())
+        await self.send_slots()
+
+        if self.game_status == "waiting":
+            self.game_status = 'game_running'
+            game_running_task = ct(self._game_running(), name="game_1_task")
+            self.running_tasks.add(game_running_task)
 
     async def remove_player(self, player: BlackJackPlayer):
         self.all_players.remove(player)
@@ -275,20 +329,24 @@ class BlackJackGame:
         if self.active_player:
             await self.send_data_to_all_players({"activ_player_username": self.active_player.player_name})
 
+    async def send_slots(self):
+        await self.send_data_to_all_players({"slot_list": [self.frontend_dict(x) if x is not None else None for x in self.sitting_players]})
+
+    async def send_house_hand(self, full=False):
+        if full:
+            await self.send_data_to_all_players({"houseHand": self.house.hands_json()})
+        else:
+            await self.send_data_to_all_players({"houseHand": self.house.partial_hand_json()})
+
     def shutdown_game(self):
+        print("Game shut down")
         self.game_status = "waiting"
         for running_task in self.running_tasks:
-            print(running_task.get_name())
             running_task.cancel()
 
     @staticmethod
     def frontend_dict(player: BlackJackPlayer) -> dict:
         return {"name": player.player_name, "hands": player.hands_json()}
-
-    def send_slots(self):
-        return {
-            "slot_list": [self.frontend_dict(x) if x is not None else None for x in self.sitting_players],
-        }
 
 
 game = BlackJackGame()

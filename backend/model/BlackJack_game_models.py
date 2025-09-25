@@ -59,8 +59,9 @@ class Card:
             raise CantCompareObjectError
         return self.rank == value.rank and self.suit == value.suit
 
-    def json_card(self ):
+    def json_card(self):
         return {"rank": self.rank, "suit": self.suit}
+
 
 class Deck:
     def __init__(self) -> None:
@@ -175,6 +176,9 @@ class BasePlayer(ABC):
     def __init__(self) -> None:
         self.hands: list[Hand] = []
 
+    def clear_hands(self):
+        self.hands: list[Hand] = []
+
     def display_hand(self, index: int = 0) -> None:
         print(f"{self.hands[index]}")
 
@@ -205,6 +209,7 @@ class BasePlayer(ABC):
 
     def hands_json(self):
         return [hand.json_hand() for hand in self.hands]
+
 
 class Player(BasePlayer):
     def __init__(self, score: int = 100) -> None:
@@ -288,7 +293,6 @@ class Game:
                         pass
 
     def deal_to_all_hands(self):
-
         for _ in range(2):
             for player in self.players:
                 for hand in player.hands:
@@ -322,9 +326,11 @@ class Game:
                 TURN_STATUS = "PLAYING"
                 while True:
                     if TURN_STATUS == "PLAYING":
-                        print(f"House: {self.house.hands[0].get_partial_hand_str()}")
+                        print(
+                            f"House: {self.house.hands[0].get_partial_hand_str()}")
                         print(f"Player: {hand.cards}")
-                        print(f"What will player {player_index + 1} do?\n1) Hit\n2) Stand\n3) Double down\n4) Split")
+                        print(
+                            f"What will player {player_index + 1} do?\n1) Hit\n2) Stand\n3) Double down\n4) Split")
                         move = input("Your move: ")
                         if move == "1":
                             player.hit_hand(hand, self.deck.get_card())
