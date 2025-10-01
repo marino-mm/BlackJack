@@ -2,13 +2,12 @@ from asyncio import Queue, Task, PriorityQueue, CancelledError, sleep
 from asyncio import create_task as ct
 import asyncio
 
-from tkinter import N
 from typing import Any, List, Set, Optional
 
 from fastapi import FastAPI
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from backend.model.BlackJack_game_models import Deck, Hand, Card, House, Player
+from backend.model.BlackJack_game_models import Deck, Hand, House, Player
 
 BlackJack = FastAPI()
 
@@ -16,7 +15,7 @@ BlackJack = FastAPI()
 class BlackJackPlayer(Player):
     def __init__(self, ws: WebSocket):
         super().__init__()
-        self.player_name = ''
+        self.player_name = ""
         self.ws: WebSocket | Any = ws
         self.action_queue = Queue(10)
         self.ping_pong_queue = Queue(1)
@@ -24,7 +23,7 @@ class BlackJackPlayer(Player):
         self.game = None
         self.worker_task: Task | Any = None
         self.ping_pong_task: Task | Any = None
-        self.player_status: str = 'Connected'
+        self.player_status: str = "Connected"
 
     def __hash__(self):
         return hash(self.player_name)
@@ -55,12 +54,11 @@ class BlackJackPlayer(Player):
                     message_dict["player"] = self
                     if self.game:
                         self.game.game_queue.put_nowait(message_dict)
-        except WebSocketDisconnect as e:
+        except WebSocketDisconnect:
             print(f"Player {self.player_name} was disconnected")
             await self.disconnect_player()
         except Exception as e:
-            print(
-                f"Exception happened in player {self.player_name}, exception: {e}")
+            print(f"Exception happened in player {self.player_name}, exception: {e}")
 
     async def websocket_ping_pong(self):
         try:
@@ -78,7 +76,8 @@ class BlackJackPlayer(Player):
             await self.disconnect_player()
         except CancelledError:
             print(
-                f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled.")
+                f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled."
+            )
 
     async def disconnect_player(self):
         if self.player_status == "Connected":
@@ -90,10 +89,9 @@ class BlackJackPlayer(Player):
                 if self.game:
                     await self.game.remove_player(self)
             except CancelledError:
-                print(f"Worker task and ping_pong_task were cancelled")
+                print("Worker task and ping_pong_task were cancelled")
             except Exception as e:
-                print(
-                    f"Error happened in disconnect_player method. Error: {e}")
+                print(f"Error happened in disconnect_player method. Error: {e}")
 
         self.player_status = "Disconnected"
 
@@ -123,24 +121,24 @@ class BlackJackGame:
 
     async def _game_running(self):
         while True:
-            if self.game_status == 'waiting':
+            if self.game_status == "waiting":
                 self.shutdown_game()
                 return False
 
-            self.game_status = 'game_move_phase'
+            self.game_status = "game_move_phase"
             await self.game_move_phase()
 
-            self.game_status = 'game_deal_phase'
+            self.game_status = "game_deal_phase"
             await self.game_deal_phase()
 
-            self.game_status = 'game_action_phase'
+            self.game_status = "game_action_phase"
             await self.game_action_phase()
 
-            self.game_status = 'end_phase'
+            self.game_status = "end_phase"
             await self.game_end_phase()
 
     async def game_move_phase(self):
-        self.game_title = 'Moving phase'
+        self.game_title = "Moving phase"
         await self.send_game_title()
 
         self.countdown_time = 5
@@ -164,8 +162,7 @@ class BlackJackGame:
         self.game_title = "Deal phase"
         await self.send_game_title()
         sitting_players_reduced = self.sitting_players.copy()
-        sitting_players_reduced = [x for x in reversed(
-            self.sitting_players) if x is not None]
+        sitting_players_reduced = [x for x in reversed(self.sitting_players) if x is not None]
 
         for _ in range(2):
             for player in sitting_players_reduced:
@@ -202,8 +199,7 @@ class BlackJackGame:
 
     async def game_action_phase(self):
         sitting_players_reduced = self.sitting_players.copy()
-        sitting_players_reduced = [x for x in reversed(
-            self.sitting_players) if x is not None]
+        sitting_players_reduced = [x for x in reversed(self.sitting_players) if x is not None]
         for activ_player in sitting_players_reduced:
             self.active_player = activ_player
             self.active_player.send_to_parent = True
@@ -218,15 +214,19 @@ class BlackJackGame:
                 await self.send_slots()
 
                 self.countdown_time = 10
-                countdown_task = ct(self.countdown_task(),
-                                     name="countdown_task")
-                game_player_action_task = ct(self.player_action_task(
-                ), name=f"game_{self.active_player.player_name}_action_task")
+                countdown_task = ct(self.countdown_task(), name="countdown_task")
+                game_player_action_task = ct(
+                    self.player_action_task(),
+                    name=f"game_{self.active_player.player_name}_action_task",
+                )
 
                 self.running_tasks.add(countdown_task)
                 self.running_tasks.add(game_player_action_task)
 
-                done, pending = await asyncio.wait([countdown_task, game_player_action_task], return_when="FIRST_COMPLETED")
+                done, pending = await asyncio.wait(
+                    [countdown_task, game_player_action_task],
+                    return_when="FIRST_COMPLETED",
+                )
                 for temp in done:
                     self.running_tasks.remove(temp)
                 for temp in pending:
@@ -262,22 +262,26 @@ class BlackJackGame:
                         return True
 
     async def poccess_players_move(self, message_dict):
-        if message_dict.get("messageType", '') == 'Action' and (action := message_dict.get("message", None)):
-            if action == 'hit':
+        if message_dict.get("messageType", "") == "Action" and (
+            action := message_dict.get("message", None)
+        ):
+            if action == "hit":
                 self.active_hand.add_card(self.deck.get_card())  # type: ignore
                 await self.send_slots()
                 if self.active_hand.is_busted:  # type: ignore
                     return True
-            if action == 'stand':
+            if action == "stand":
                 return True
-            if action == 'double_down':
+            if action == "double_down":
                 self.active_player.dobule_down_hand(  # type: ignore
-                    self.active_hand, self.deck.get_card())  # type: ignore
+                    self.active_hand, self.deck.get_card()
+                )  # type: ignore
                 await self.send_slots()
                 return True
-            if action == 'split':
+            if action == "split":
                 self.active_player.split_hand(  # type: ignore
-                    self.active_hand, self.deck.get_card())  # type: ignore
+                    self.active_hand, self.deck.get_card()
+                )  # type: ignore
                 await self.send_slots()
 
     def move_slot(self, message):
@@ -307,8 +311,7 @@ class BlackJackGame:
     async def start_countdown(self, time: int):
         self.countdown_time = time
         if not self.countdown_worker:
-            self.countdown_worker = ct(
-                self.countdown_worker(), name="countdown_task")
+            self.countdown_worker = ct(self.countdown_worker(), name="countdown_task")
             self.running_tasks.add(self.countdown_worker)
 
     async def add_player(self, player: BlackJackPlayer):
@@ -319,7 +322,7 @@ class BlackJackGame:
         await self.send_house_hand(full=False)
 
         if self.game_status == "waiting":
-            self.game_status = 'game_running'
+            self.game_status = "game_running"
             game_running_task = ct(self._game_running(), name="game_1_task")
             self.running_tasks.add(game_running_task)
 
@@ -333,17 +336,30 @@ class BlackJackGame:
 
     async def send_active_player(self):
         if self.active_player:
-            await self.send_data_to_all_players({"activ_player_username": self.active_player.player_name})
+            await self.send_data_to_all_players(
+                {"activ_player_username": self.active_player.player_name}
+            )
 
     async def send_slots(self):
-        await self.send_data_to_all_players({"slot_list": [self.frontend_dict(x) if x is not None else None for x in self.sitting_players]})
+        await self.send_data_to_all_players(
+            {
+                "slot_list": [
+                    self.frontend_dict(x) if x is not None else None
+                    for x in self.sitting_players
+                ]
+            }
+        )
 
     async def send_house_hand(self, full=False):
         if len(self.house.hands[0].cards) > 0:
             if full:
-                await self.send_data_to_all_players({"houseHand": self.house.hands_json()})
+                await self.send_data_to_all_players(
+                    {"houseHand": self.house.hands_json()}
+                )
             else:
-                await self.send_data_to_all_players({"houseHand": self.house.partial_hand_json()})
+                await self.send_data_to_all_players(
+                    {"houseHand": self.house.partial_hand_json()}
+                )
 
     async def send_countdown_time(self):
         await self.send_data_to_all_players({"timeRemaining": self.countdown_time})
@@ -373,7 +389,7 @@ async def websocket_endpoint(ws: WebSocket):
 
         await blackjack_player.ping_pong_task
     except CancelledError:
-        print(f"Cancelled Error in websocket_endpoint")
+        print("Cancelled Error in websocket_endpoint")
     except Exception as e:
         if blackjack_player:
             await blackjack_player.disconnect_player()
