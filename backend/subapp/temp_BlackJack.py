@@ -1,88 +1,72 @@
 
-
+from asyncio import Queue, Task
 from dataclasses import dataclass
-from typing import List
-# from BlackJack_app import BlackJackGame
+from typing import List, Optional, Set
+
+from backend.model.BlackJack_game_models import Deck, Hand, House
+from backend.subapp.BlackJack_app import BlackJackPlayer
 
 
 @dataclass
-class PlayerMessage:
-    player: int
+class PlayerMessage():
 
-    def execute(self):
-        pass
-
-
-@dataclass
-class PlayerMessageJoin(PlayerMessage):
-    pass
-
-    def execute(self):
-        print("PlayerMessageJoin")
+    player: BlackJackPlayer
+    game: BlackJackGame
+    type: str
 
 
-@dataclass
-class PlayerMessageLeave(PlayerMessage):
-    pass
+class BlackJackGame:
+    def __init__(self):
+        self.all_players: List[BlackJackPlayer] = []
+        self.sitting_players: List[Optional[BlackJackPlayer]] = [
+            None for _ in range(5)]
+        self.game_title = ""
 
-    def execute(self):
-        print("PlayerMessageLeave")
+        self.game_queue = Queue(100)
 
+        self.house = House()
+        self.deck = Deck()
 
-@dataclass
-class PlayerMessageMoveSeat(PlayerMessage):
-    seat_index: int
+        self.active_player: Optional[BlackJackPlayer] = None
+        self.active_hand: Optional[Hand] = None
+        self.active_hand_index: int = -1
+        self.active_player_index: int = -1
 
-    def execute(self):
-        print("PlayerMessageMoveSeat")
+        self.countdown_time = 30
+        self.countdown_worker: Optional[Task] = None
 
+        self.running_tasks: Set[Task] = set()
 
-@dataclass
-class PlayerMessageHandAction(PlayerMessage):
-    action: str
+        self.game_status = "waiting"
 
-    def execute(self):
-        print("PlayerMessageHandAction")
+    async def game_worker(self):
+        while True:
+            message: PlayerMessage = self.game_queue.get()
 
+            if message.type == 'Join':
+                await self.add_player(message.player)
+            elif message.type == 'Disconect':
+                await self.remove_player(message.player)
 
-@dataclass
-class Test:
+    async def add_player(self, player: BlackJackPlayer):
+        self.all_players.append(player)
+        # await self.send_slots()
+        # await self.send_countdown_time()
+        # await self.send_game_title()
+        # await self.send_house_hand(full=False)
 
-    @staticmethod
-    def test():
-        message_list: List[PlayerMessage] = [
-            PlayerMessageJoin(0),
-            PlayerMessageLeave(0),
-            PlayerMessageMoveSeat(0, 0),
-            PlayerMessageHandAction(0, 'hit'),
-        ]
-        for m in message_list:
-            m.execute()
+        if self.game_status == "waiting":
+            self.game_status = "game_running"
+            # game_running_task = ct(self._game_running(), name="game_1_task")
+            # self.running_tasks.add(game_running_task)
 
+    async def remove_player(self, player: BlackJackPlayer):
+        self.all_players.remove(player)
+        if len(self.all_players) == 0:
+            self.shutdown_game()
 
-Test().test()
-
-
-# class BlackJackGame_ext(BlackJackGame):
-
-#     async def game_worker(self):
-#         while True:
-#             message_dict = await self.game_queue.get()
-
-#     async def player_move_task(self):
-#         while True:
-#             message_dict = await self.game_queue.get()
-#             if self.game_status == "game_move_phase":
-#                 if message_dict.get("new_slot_index") is not None:
-#                     self.move_slot(message_dict)
-#                     await self.send_slots()
-
-#     async def player_action_task(self):
-#         while True:
-#             message_dict = await self.game_queue.get()
-#             if self.game_status == "game_action_phase":
-#                 if message_dict.get("player", None) == self.active_player:
-#                     valid_move = await self.poccess_players_move(message_dict)
-#                     if valid_move:
-#                         await self.send_slots()
-#                         return True
+    def shutdown_game(self):
+        print("Game shut down")
+        self.game_status = "waiting"
+        for running_task in self.running_tasks:
+            running_task.cancel()
