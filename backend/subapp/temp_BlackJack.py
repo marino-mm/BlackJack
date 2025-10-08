@@ -1,26 +1,14 @@
-
 from asyncio import Event, Queue, Task
-from dataclasses import dataclass
 from typing import List, Optional, Set
 
 from backend.model.BlackJack_game_models import Deck, Hand, House
 from backend.subapp.BlackJack_app import BlackJackPlayer
 
 
-@dataclass
-class PlayerMessage():
-
-    player: BlackJackPlayer
-    game: BlackJackGame
-    type: str
-    data: dict
-
-
 class BlackJackGame:
     def __init__(self):
         self.all_players: List[BlackJackPlayer] = []
-        self.sitting_players: List[Optional[BlackJackPlayer]] = [
-            None for _ in range(5)]
+        self.sitting_players: List[Optional[BlackJackPlayer]] = [None for _ in range(5)]
         self.game_title = ""
 
         self.game_queue = Queue(100)
@@ -38,27 +26,24 @@ class BlackJackGame:
 
         self.running_tasks: Set[Task] = set()
 
-        self.continue_to_next_move = Event()
+        self._next_hand = Event()
 
         self.game_status = "waiting"
 
     async def game_worker(self):
         while True:
             message = await self.game_queue.get()
-            if message.type == 'Join':
+            if message.type == "Join":
                 await self.add_player(message.player)
-            elif message.type == 'Disconect':
+            elif message.type == "Disconect":
                 await self.remove_player(message.player)
-            elif message.type == 'MoveSlots':
+            elif message.type == "MoveSlots":
                 if message.data.get("new_slot_index") is not None:
                     self.move_slot(message.data)
                     # await self.send_slots()
-            elif message.type == 'PlayerAction':
-                if message.data.get("player", None) == self.active_player:
-                    valid_move = await self.poccess_players_move(message.data)
-                    if valid_move:
-                        # await self.send_slots()
-                        self.continue_to_next_move.set()
+            elif message.type == "PlayerAction":
+                if message.player == self.active_player:
+                    await self.poccess_players_move(message.data)
 
     async def add_player(self, player: BlackJackPlayer):
         self.all_players.append(player)
@@ -91,24 +76,20 @@ class BlackJackGame:
                 self.sitting_players[old_index] = None
 
     async def poccess_players_move(self, message_dict):
-        if message_dict.get("messageType", "") == "Action" and (
-            action := message_dict.get("message", None)
-        ):
+        if message_dict.get("messageType", "") == "Action" and (action := message_dict.get("message", None)):
             if action == "hit":
                 self.active_hand.add_card(self.deck.get_card())
                 # await self.send_slots()
                 if self.active_hand.is_busted:
-                    return True
+                    self._next_hand.set()
             if action == "stand":
-                return True
+                self._next_hand.set()
             if action == "double_down":
-                self.active_player.dobule_down_hand(
-                    self.active_hand, self.deck.get_card())
+                self.active_player.dobule_down_hand(self.active_hand, self.deck.get_card())
                 # await self.send_slots()
-                return True
+                self._next_hand.set()
             if action == "split":
-                self.active_player.split_hand(
-                    self.active_hand, self.deck.get_card())
+                self.active_player.split_hand(self.active_hand, self.deck.get_card())
                 # await self.send_slots()
 
     def shutdown_game(self):
