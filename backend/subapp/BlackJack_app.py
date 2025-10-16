@@ -66,9 +66,7 @@ class BlackJackPlayer(Player):
                 await asyncio.sleep(5)
                 await self.ws.send_json({"PingPong": "Ping"})
                 try:
-                    message = await asyncio.wait_for(
-                        self.ping_pong_queue.get(), timeout=5
-                    )
+                    message = await asyncio.wait_for(self.ping_pong_queue.get(), timeout=5)
                 except asyncio.TimeoutError:
                     print(f"No Pong response from {self.ws}")
                     await self.ws.close(reason="Pong not received")
@@ -77,9 +75,7 @@ class BlackJackPlayer(Player):
             print(f"{self.player_name} disconnected due to missing Pong.")
             await self.disconnect_player()
         except CancelledError:
-            print(
-                f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled."
-            )
+            print(f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled.")
 
     async def disconnect_player(self):
         if self.player_status == "Connected":
@@ -151,9 +147,7 @@ class BlackJackGame:
         self.running_tasks.add(countdown_task)
         self.running_tasks.add(game_moving_task)
 
-        done, pending = await asyncio.wait(
-            [countdown_task, game_moving_task], return_when="FIRST_COMPLETED"
-        )
+        done, pending = await asyncio.wait([countdown_task, game_moving_task], return_when="FIRST_COMPLETED")
         for player in self.all_players:
             player.send_to_parent = True
         for temp in done:
@@ -166,9 +160,7 @@ class BlackJackGame:
         self.game_title = "Deal phase"
         await self.send_game_title()
         sitting_players_reduced = self.sitting_players.copy()
-        sitting_players_reduced = [
-            x for x in reversed(self.sitting_players) if x is not None
-        ]
+        sitting_players_reduced = [x for x in reversed(self.sitting_players) if x is not None]
 
         for _ in range(2):
             for player in sitting_players_reduced:
@@ -205,9 +197,7 @@ class BlackJackGame:
 
     async def game_action_phase(self):
         sitting_players_reduced = self.sitting_players.copy()
-        sitting_players_reduced = [
-            x for x in reversed(self.sitting_players) if x is not None
-        ]
+        sitting_players_reduced = [x for x in reversed(self.sitting_players) if x is not None]
         for activ_player in sitting_players_reduced:
             self.active_player = activ_player
             self.active_player.send_to_parent = True
@@ -270,9 +260,7 @@ class BlackJackGame:
                         return True
 
     async def poccess_players_move(self, message_dict):
-        if message_dict.get("messageType", "") == "Action" and (
-            action := message_dict.get("message", None)
-        ):
+        if message_dict.get("messageType", "") == "Action" and (action := message_dict.get("message", None)):
             if action == "hit":
                 self.active_hand.add_card(self.deck.get_card())
                 await self.send_slots()
@@ -281,9 +269,7 @@ class BlackJackGame:
             if action == "stand":
                 return True
             if action == "double_down":
-                self.active_player.dobule_down_hand(
-                    self.active_hand, self.deck.get_card()
-                )
+                self.active_player.dobule_down_hand(self.active_hand, self.deck.get_card())
                 await self.send_slots()
                 return True
             if action == "split":
@@ -342,30 +328,17 @@ class BlackJackGame:
 
     async def send_active_player(self):
         if self.active_player:
-            await self.send_data_to_all_players(
-                {"activ_player_username": self.active_player.player_name}
-            )
+            await self.send_data_to_all_players({"activ_player_username": self.active_player.player_name})
 
     async def send_slots(self):
-        await self.send_data_to_all_players(
-            {
-                "slot_list": [
-                    self.frontend_dict(x) if x is not None else None
-                    for x in self.sitting_players
-                ]
-            }
-        )
+        await self.send_data_to_all_players({"slot_list": [self.frontend_dict(x) if x is not None else None for x in self.sitting_players]})
 
     async def send_house_hand(self, full=False):
         if len(self.house.hands[0].cards) > 0:
             if full:
-                await self.send_data_to_all_players(
-                    {"houseHand": self.house.hands_json()}
-                )
+                await self.send_data_to_all_players({"houseHand": self.house.hands_json()})
             else:
-                await self.send_data_to_all_players(
-                    {"houseHand": self.house.partial_hand_json()}
-                )
+                await self.send_data_to_all_players({"houseHand": self.house.partial_hand_json()})
 
     async def send_countdown_time(self):
         await self.send_data_to_all_players({"timeRemaining": self.countdown_time})

@@ -49,9 +49,7 @@ class BlackJackPlayer(Player):
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
                     message_dict["player"] = self
-                    player_message = PlayerMessage(
-                        self, self.game, message_dict["type"], message_dict
-                    )
+                    player_message = PlayerMessage(self, self.game, message_dict["type"], message_dict)
                     if self.game:
                         self.game.game_queue.put_nowait(player_message)
         except WebSocketDisconnect:
@@ -75,9 +73,7 @@ class BlackJackPlayer(Player):
             print(f"{self.player_name} disconnected due to missing Pong.")
             await self.disconnect_player()
         except CancelledError:
-            print(
-                f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled."
-            )
+            print(f"{self.player_name} was disconnected so websocket_ping_pong_task was cancelled.")
 
     async def disconnect_player(self):
         if self.player_status == "Connected":

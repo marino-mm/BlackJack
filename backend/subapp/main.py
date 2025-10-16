@@ -72,8 +72,7 @@ class GameTable:
     def __init__(self):
         self.listening_players = []
         self.STATUS = ""
-        self.table_slots: List[UserConnection | None] = [
-            None, None, None, None, None]
+        self.table_slots: List[UserConnection | None] = [None, None, None, None, None]
         self.game_Queue = Queue(100)
         self.deck = Deck()
         self.house = House()
@@ -84,12 +83,10 @@ class GameTable:
         self.listening_players.append(listener)
 
     async def remove_listener(self, listener):
-        print(
-            f"Before removing listener: {[listener.username for listener in self.listening_players]}")
+        print(f"Before removing listener: {[listener.username for listener in self.listening_players]}")
         self.listening_players.remove(listener)
         self.table_slots.remove(listener)
-        print(
-            f"After listener: {[listener.username for listener in self.listening_players]}")
+        print(f"After listener: {[listener.username for listener in self.listening_players]}")
         await self.send_updated_slots()
 
     async def move_slot(self, message):
@@ -114,13 +111,11 @@ class GameTable:
                     if message.get("user") == filter_player:
                         if message.get("messageType") == "Action":
                             if message.get("message") == "hit":
-                                filter_player.hit_hand(
-                                    hand, self.deck.get_card())
+                                filter_player.hit_hand(hand, self.deck.get_card())
                             if message.get("message") == "stand":
                                 return "Player action was stand"
                             if message.get("message") == "double_down":
-                                filter_player.dobule_down_hand(
-                                    hand, self.deck.get_card())
+                                filter_player.dobule_down_hand(hand, self.deck.get_card())
                                 return "Player action was double_down"
                             if message.get("message") == "split":
                                 filter_player.split_hand(hand)
@@ -139,9 +134,7 @@ class GameTable:
     async def send_updated_slots(self, activePlayer: UserConnection = None, activeHand=None):
         data = {
             "messageType": "UpdateSlots",
-            "slot_list": [
-                x.frontend_dict() if x is not None else None for x in self.table_slots
-            ],
+            "slot_list": [x.frontend_dict() if x is not None else None for x in self.table_slots],
         }
         if activeHand:
             activePlayerIndex = -1
@@ -156,9 +149,7 @@ class GameTable:
                             activeHandIndex = hi
                             break
 
-            data["slot_list"][activePlayerIndex]["hands"][activeHandIndex][
-                "isActiveHand"
-            ] = True
+            data["slot_list"][activePlayerIndex]["hands"][activeHandIndex]["isActiveHand"] = True
 
         await self.send_json_to_all(data)
 
@@ -175,8 +166,7 @@ class GameTable:
     async def game_waiting_for_players_to_sit(self):
         for player in self.listening_players:
             player.SEND_MESSAGE_TO_PARENT = True
-        task = asyncio.create_task(
-            self.game_queue_worker(), name="game_waiting_for_players_to_sit")
+        task = asyncio.create_task(self.game_queue_worker(), name="game_waiting_for_players_to_sit")
         await asyncio.sleep(5)
         task.cancel()
         for player in self.listening_players:
@@ -188,9 +178,7 @@ class GameTable:
         while hand_index < len(player.hands):
             hand = player.hands[hand_index]
             await self.send_updated_slots(player, hand)
-            task = asyncio.create_task(
-                self.game_queue_worker(player, hand), name="waiting_for_players_move"
-            )
+            task = asyncio.create_task(self.game_queue_worker(player, hand), name="waiting_for_players_move")
             try:
                 result = await asyncio.wait_for(task, timeout=10)
                 pass
@@ -221,9 +209,7 @@ class GameTable:
             self.STATUS = "Playing"
             await self.game_waiting_for_players_to_sit()
             players_turn_list = reversed(self.table_slots.copy())
-            players_turn_list = [
-                player for player in players_turn_list if player is not None
-            ]
+            players_turn_list = [player for player in players_turn_list if player is not None]
             await self.deal_to_all_hands(players_turn_list)
 
             await self.send_updated_slots()
@@ -239,9 +225,7 @@ class GameTable:
 
             await self.send_activ_player()
             await self.house_play_hand()
-            await self.send_json_to_all(
-                {"messageType": "UpdateHouse", "houseHand": self.house.hands_json()}
-            )
+            await self.send_json_to_all({"messageType": "UpdateHouse", "houseHand": self.house.hands_json()})
             await asyncio.sleep(10)
             await self.restart_round(players_turn_list)
             print("Round ended")
@@ -282,8 +266,7 @@ class GameTable:
     async def send_data_to_frontend(self, specific_user: UserConnection = None, slots=None, activeHand=None, activePlayer=None):
         data = {}
         if slots:
-            data["slot_list"] = [
-                x.frontend_dict() if x is not None else None for x in self.table_slots]
+            data["slot_list"] = [x.frontend_dict() if x is not None else None for x in self.table_slots]
             if activeHand:
                 activePlayerIndex = -1
                 activeHandIndex = -1
