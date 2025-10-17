@@ -262,18 +262,18 @@ class BlackJackGame:
     async def poccess_players_move(self, message_dict):
         if message_dict.get("messageType", "") == "Action" and (action := message_dict.get("message", None)):
             if action == "hit":
-                self.active_hand.add_card(self.deck.get_card())
+                self.active_hand.add_card(self.deck.get_card()) # type: ignore
                 await self.send_slots()
-                if self.active_hand.is_busted:
+                if self.active_hand.is_busted: # type: ignore
                     return True
             if action == "stand":
                 return True
             if action == "double_down":
-                self.active_player.dobule_down_hand(self.active_hand, self.deck.get_card())
+                self.active_player.dobule_down_hand(self.active_hand, self.deck.get_card()) # type: ignore
                 await self.send_slots()
                 return True
             if action == "split":
-                self.active_player.split_hand(self.active_hand, self.deck.get_card())
+                self.active_player.split_hand(self.active_hand, self.deck.get_card()) # type: ignore
                 await self.send_slots()
 
     def move_slot(self, message):

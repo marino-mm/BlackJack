@@ -41,6 +41,20 @@ class BlackJackPlayer(Player):
         self.worker_task = ct(self.start_worker())
         self.ping_pong_task = ct(self.websocket_ping_pong())
 
+    @classmethod
+    async def player_creation_cls(cls, ws, game):
+        self = cls(ws)
+        while not self.player_name:
+            message_dict = await self.ws.receive_json()
+            if message_dict.get("username"):
+                self.player_name = message_dict.get("username")
+
+        self.game = game
+        self.worker_task = ct(self.start_worker())
+        self.ping_pong_task = ct(self.websocket_ping_pong())
+        
+        return self
+
     async def start_worker(self):
         try:
             while True:
@@ -49,7 +63,7 @@ class BlackJackPlayer(Player):
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
                     message_dict["player"] = self
-                    player_message = PlayerMessage(self, self.game, message_dict["type"], message_dict)
+                    player_message = PlayerMessage(self, self.game, message_dict["type"], message_dict) # type: ignore
                     if self.game:
                         self.game.game_queue.put_nowait(player_message)
         except WebSocketDisconnect:
