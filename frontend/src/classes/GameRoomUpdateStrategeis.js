@@ -30,40 +30,40 @@ class UpdateSlotStrategy extends UpdateStrategy{
 
 class UpdateCountdownTimer extends UpdateStrategy{
     is_applicable(message){
-        return message.timeRemaining !== undefined
+        return message.time_remaining !== undefined
     }
     update(message){
-        this.context.setTimeRemaining(message.timeRemaining)
+        this.context.setTimeRemaining(message.time_remaining)
     }
 }
 
 class UpdateGameState extends UpdateStrategy{
 
     is_applicable(message){
-        return message.eventName !== undefined
+        return message.event_name !== undefined
     }
     update(message){
-        this.context.setEventName(message.eventName)
+        this.context.setEventName(message.event_name)
     }
 }
 
 class UpdateHouseHand extends UpdateStrategy{
     is_applicable(message){
-        return message.houseHand !== undefined
+        return message.house_hand !== undefined
     }
     update(message){
         const house = this.context.house
-        const new_house_hand = {...house, hands: message.houseHand}
+        const new_house_hand = {...house, hands: message.house_hand}
         this.context.setHouse(new_house_hand)
     }
 }
 
 class UpdateActivePlayer extends UpdateStrategy{
     is_applicable(message){
-        return message.activ_player_username !== undefined
+        return message.active_player_username !== undefined
     }
     update(message){
-        this.context.setTurn(this.context.username === message.activ_player_username)
+        this.context.setTurn(this.context.username === message.active_player_username)
     }
 }
 

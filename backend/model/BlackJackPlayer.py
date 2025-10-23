@@ -3,6 +3,7 @@ import asyncio
 from typing import Any
 from fastapi import WebSocketDisconnect
 from starlette.websockets import WebSocket
+from backend.model.BlackJackGameState import GameState
 from backend.model.BlackJack_game_models import Player
 from asyncio import create_task as ct
 
@@ -14,12 +15,16 @@ class BlackJackPlayer(Player):
         super().__init__()
         self.player_name = ""
         self.ws: WebSocket | Any = ws
-        self.action_queue = Queue(10)
         self.ping_pong_queue = Queue(1)
         self.send_to_parent = False
         self.game = None
-        self.worker_task: Task | Any = None
-        self.ping_pong_task: Task | Any = None
+        self.outbound_queue = asyncio.Queue()
+        
+        self.receiver_task: Task = ct(self.receive_loop())
+        self.sender_task: Task = ct(self.send_loop())
+        
+        self.ping_pong_task: Task = ct(self.websocket_ping_pong())
+        
         self.player_status: str = "Connected"
 
     def __hash__(self):
@@ -30,17 +35,7 @@ class BlackJackPlayer(Player):
             return self.player_name == other.player_name
         else:
             return False
-
-    async def player_creation(self, game):
-        while not self.player_name:
-            message_dict = await self.ws.receive_json()
-            if message_dict.get("username"):
-                self.player_name = message_dict.get("username")
-
-        self.game = game
-        self.worker_task = ct(self.start_worker())
-        self.ping_pong_task = ct(self.websocket_ping_pong())
-
+        
     @classmethod
     async def player_creation_cls(cls, ws, game):
         self = cls(ws)
@@ -50,22 +45,34 @@ class BlackJackPlayer(Player):
                 self.player_name = message_dict.get("username")
 
         self.game = game
-        self.worker_task = ct(self.start_worker())
-        self.ping_pong_task = ct(self.websocket_ping_pong())
         
         return self
 
-    async def start_worker(self):
+    async def receive_loop(self):
         try:
             while True:
                 message_dict = await self.ws.receive_json()
                 if message_dict.get("messageType") == "PingPong":
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
-                    message_dict["player"] = self
-                    player_message = PlayerMessage(self, self.game, message_dict["type"], message_dict) # type: ignore
+                    player_message = PlayerMessage(self, self.game, message_dict["type"], message_dict)
                     if self.game:
                         self.game.game_queue.put_nowait(player_message)
+        except WebSocketDisconnect:
+            print(f"Player {self.player_name} was disconnected")
+            await self.disconnect_player()
+        except Exception as e:
+            print(f"Exception happened in player {self.player_name}, exception: {e}")
+            
+    
+    def send(self, data: GameState):
+        self.outbound_queue.put_nowait(data)
+            
+    async def send_loop(self):
+        try:
+            while True:
+                data = self.outbound_queue.get()
+                self.ws.send_json(data)
         except WebSocketDisconnect:
             print(f"Player {self.player_name} was disconnected")
             await self.disconnect_player()
@@ -92,12 +99,14 @@ class BlackJackPlayer(Player):
     async def disconnect_player(self):
         if self.player_status == "Connected":
             try:
-                if self.worker_task:
-                    self.worker_task.cancel()
+                if self.receiver_task:
+                    self.receiver_task.cancel()
                 if self.ping_pong_task:
                     self.ping_pong_task.cancel()
                 if self.game:
-                    await self.game.remove_player(self)
+                    # await self.game.remove_player(self)
+                    message = PlayerMessage(self, self.game, "Disconnect")
+                    self.game.
             except CancelledError:
                 print("Worker task and ping_pong_task were cancelled")
             except Exception as e:
