@@ -25,9 +25,13 @@ class BlackJackGame:
         self.countdown_time = 30
         self.countdown_worker: Optional[Task] = None
 
+        self.game_worker_task: Task = ct(self.game_worker(), name="game_worker_task")
+        self.game_phase_task: Task = ct(self.game_worker(), name="game_worker_task")
         self.running_tasks: Set[Task] = set()
+        self.running_tasks.add(self.game_worker_task)
+        
         self._next_hand = Event()
-
+        self._game_running = Event()
         self.game_status = "waiting"
 
     async def game_worker(self):
@@ -45,8 +49,6 @@ class BlackJackGame:
                     await self.poccess_players_move(message.data)
             elif message.type == PlayerMessageTypeEnum.UNKNOWN:
                 continue
-            self.send_update_partial()
-            
 
     async def add_player(self, player: BlackJackPlayer):
         self.all_players.append(player)
@@ -54,9 +56,8 @@ class BlackJackGame:
 
         if self.game_status == "waiting":
             self.game_status = "game_running"
-            game_running_task = ct(self.game_worker(), name="game_1_task")
-            self.running_tasks.add(game_running_task)
-
+            self._game_running.set()
+            
     async def remove_player(self, player: BlackJackPlayer):
         self.all_players.remove(player)
         if len(self.all_players) == 0:
@@ -94,8 +95,10 @@ class BlackJackGame:
     def shutdown_game(self):
         print("Game shut down")
         self.game_status = "waiting"
+        self._game_running.clear()
         for running_task in self.running_tasks:
-            running_task.cancel()
+            if running_task != self.game_worker_task:
+                running_task.cancel()
 
     def send_update_partial(self, player: Optional[BlackJackPlayer] = None):
         game_state = GameState.build_partial(self)
@@ -112,3 +115,28 @@ class BlackJackGame:
         else:
             for temp_player in self.all_players:
                 temp_player.send(game_state)
+
+    async def game_phase(self):
+        # game_move_phase >> game_deal_phase >> game_action_phase >> end_phase
+        while True:
+            if self._game_running.is_set() is False:
+                await self._game_running.wait()
+            
+            elif self.game_status == "game_move_phase":
+                await self.game_move_phase()
+                self.game_status = "game_deal_phase"
+
+            elif self.game_status == "game_deal_phase":
+                pass
+                await self.game_deal_phase()
+                self.game_status = "game_action_phase"
+
+            elif self.game_status == "game_action_phase":
+                pass
+                await self.game_action_phase()
+                self.game_status = "end_phase"
+
+            elif self.game_status == "end_phase":
+                pass
+                await self.game_end_phase()
+                self.game_status = "game_move_phase"
