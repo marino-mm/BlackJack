@@ -1,4 +1,4 @@
-from asyncio import Event, Queue, Task
+from asyncio import Event, Queue, Task, sleep, wait
 from typing import List, Optional, Set
 from backend.model.BlackJack_game_models import Deck, Hand, House
 from backend.model.BlackJackPlayer import BlackJackPlayer, GameState
@@ -23,13 +23,13 @@ class BlackJackGame:
         self.active_player_index: int = -1
 
         self.countdown_time = 30
-        self.countdown_worker: Optional[Task] = None
+        self.countdown_worker_task: Optional[Task] = None
 
         self.game_worker_task: Task = ct(self.game_worker(), name="game_worker_task")
         self.game_phase_task: Task = ct(self.game_worker(), name="game_worker_task")
         self.running_tasks: Set[Task] = set()
         self.running_tasks.add(self.game_worker_task)
-        
+
         self._next_hand = Event()
         self._game_running = Event()
         self.game_status = "waiting"
@@ -57,7 +57,7 @@ class BlackJackGame:
         if self.game_status == "waiting":
             self.game_status = "game_running"
             self._game_running.set()
-            
+
     async def remove_player(self, player: BlackJackPlayer):
         self.all_players.remove(player)
         if len(self.all_players) == 0:
@@ -79,18 +79,19 @@ class BlackJackGame:
 
     async def poccess_players_move(self, message_dict):
         if message_dict.get("messageType", "") == "Action" and (action := message_dict.get("message", None)):
-            if action == "hit":
-                self.active_hand.add_card(self.deck.get_card())
-                if self.active_hand.is_busted:
+            if self.active_hand and self.deck and self.active_player:
+                if action == "hit":
+                    self.active_hand.add_card(self.deck.get_card())
+                    if self.active_hand.is_busted:
+                        self._next_hand.set()
+                if action == "stand":
                     self._next_hand.set()
-            if action == "stand":
-                self._next_hand.set()
-            if action == "double_down":
-                self.active_player.dobule_down_hand(self.active_hand, self.deck.get_card())
-                self._next_hand.set()
-            if action == "split":
-                self.active_player.split_hand(self.active_hand, self.deck.get_card())
-            self.send_update_partial()
+                if action == "double_down":
+                    self.active_player.dobule_down_hand(self.active_hand, self.deck.get_card())
+                    self._next_hand.set()
+                if action == "split":
+                    self.active_player.split_hand(self.active_hand, self.deck)
+                self.send_update_partial()
 
     def shutdown_game(self):
         print("Game shut down")
@@ -107,7 +108,7 @@ class BlackJackGame:
         else:
             for temp_player in self.all_players:
                 temp_player.send(game_state)
-    
+
     def send_update_full(self, player: Optional[BlackJackPlayer] = None):
         game_state = GameState.build_full(self)
         if player is not None:
@@ -116,12 +117,24 @@ class BlackJackGame:
             for temp_player in self.all_players:
                 temp_player.send(game_state)
 
+    def send_update_time(self):
+        game_state = GameState.build_countdown_time(self)
+        for temp_player in self.all_players:
+            temp_player.send(game_state)
+
+    async def countdown_worker(self):
+        while self.countdown_time > 0:
+            self.send_update_time()
+            await sleep(1)
+            self.countdown_time -= 1
+        self.send_update_time()
+
     async def game_phase(self):
         # game_move_phase >> game_deal_phase >> game_action_phase >> end_phase
         while True:
             if self._game_running.is_set() is False:
                 await self._game_running.wait()
-            
+
             elif self.game_status == "game_move_phase":
                 await self.game_move_phase()
                 self.game_status = "game_deal_phase"
@@ -140,3 +153,82 @@ class BlackJackGame:
                 pass
                 await self.game_end_phase()
                 self.game_status = "game_move_phase"
+
+    async def game_move_phase(self):
+        self.game_title = "Moving phase"
+        self.countdown_time = 5
+        for player in self.all_players:
+            player.send_to_parent = True
+
+        self.send_update_partial()
+        self.countdown_worker_task = ct(self.countdown_worker(), name="countdown_task")
+
+        await self.countdown_worker_task
+
+        for player in self.all_players:
+            player.send_to_parent = False
+
+    async def game_deal_phase(self):
+        self.game_title = "Deal phase"
+        self.send_update_partial()
+
+        sitting_players_reduced = self.sitting_players.copy()
+        sitting_players_reduced = [x for x in reversed(self.sitting_players) if x is not None]
+
+        for _ in range(2):
+            for player in sitting_players_reduced:
+                if not player:
+                    continue
+                if len(player.hands) == 0:
+                    player.hands.append(Hand())
+                player.hands[0].add_card(self.deck.get_card())
+                self.send_update_partial()
+                await sleep(0.5)
+
+            self.house.hands[0].add_card(self.deck.get_card())
+            self.send_update_partial()
+            await sleep(0.5)
+
+    async def game_action_phase(self):
+        sitting_players_reduced = self.sitting_players.copy()
+        sitting_players_reduced = [x for x in reversed(self.sitting_players) if x is not None]
+        for activ_player in sitting_players_reduced:
+            self.active_player = activ_player
+            self.active_player.send_to_parent = True
+            self.game_title = f"{activ_player.player_name}'s turn"
+            self.send_update_partial()
+
+            self.active_hand_index = 0
+            while self.active_hand_index < len(self.active_player.hands):
+                self.active_hand = self.active_player.hands[self.active_hand_index]
+                self.active_hand.is_active_hand = True
+                self.send_update_partial()
+
+                self.countdown_time = 10
+                self._next_hand.clear()
+                self.countdown_worker_task = ct(self.countdown_worker(), name="countdown_task")
+                _next_hand_task = ct(self._next_hand.wait(), name="_next_hand_task")
+
+                done, pending = await wait(
+                    [self.countdown_worker_task, _next_hand_task],
+                    return_when="FIRST_COMPLETED",
+                )
+                for task in pending:
+                    task.cancel()
+                self.countdown_time = 0
+                self._next_hand.clear()
+                self.send_update_partial()
+                self.active_hand_index += 1
+
+            self.active_player.send_to_parent = False
+        self.active_player = None
+        self.active_hand_index = -1
+        self.countdown_time = 0
+        self.send_update_full()
+
+    async def game_end_phase(self):
+        self.game_title = "End phase"
+        self.send_update_partial()
+        self.countdown_time = 10
+        self.countdown_worker_task = ct(self.countdown_worker(), name="countdown_task")
+        await self.countdown_worker_task

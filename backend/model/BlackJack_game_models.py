@@ -188,12 +188,14 @@ class BasePlayer(ABC):
     def hit_hand(self, hand: Hand, card) -> None:
         hand.add_card(card)
 
-    def split_hand(self, hand: Hand) -> None:
+    def split_hand(self, hand: Hand, deck: Deck) -> None:
         if hand.cards[0].rank == hand.cards[1].rank and self.score > hand.bid:
             self.hands.append(Hand(hand.bid))
             card = hand.cards.pop()
             self.hands[-1].add_card(card)
             self.score -= hand.bid
+            hand.add_card(deck.get_card())
+            self.hands[-1].add_card(deck.get_card())
             print("You have succesfully splited your hand!")
         else:
             print("You can't split your hand!")
@@ -343,7 +345,7 @@ class Game:
                                 print("You hand is busted!")
                             TURN_STATUS = "STANDING"
                         if move == "4":
-                            player.split_hand(hand)
+                            player.split_hand(hand, self.deck)
                     elif TURN_STATUS == "STANDING":
                         print("Your turn ended")
                         break

@@ -1,3 +1,6 @@
 __pycache__
 venv/
 .vscode/
+.ruff_cache
+.git
+.idea

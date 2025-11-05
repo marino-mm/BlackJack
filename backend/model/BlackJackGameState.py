@@ -43,3 +43,9 @@ class GameState(BaseModel):
             house_hand=house_hand,
             time_remaining=time_remaining,
         )
+
+    @classmethod
+    def build_countdown_time(cls, game: BlackJackGame, full_house_hand=False):
+        time_remaining = game.countdown_time
+
+        return cls(time_remaining=time_remaining)
