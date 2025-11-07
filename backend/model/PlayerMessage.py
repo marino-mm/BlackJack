@@ -1,8 +1,9 @@
 from enum import Enum, auto
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
-from backend.subapp.temp_BlackJack import BlackJackGame, BlackJackPlayer
-
+if TYPE_CHECKING:
+    from .BlackJackGame import BlackJackGame
+    from .BlackJackPlayer import BlackJackPlayer
 
 class PlayerMessageTypeEnum(Enum):
     JOIN = auto()
@@ -13,8 +14,8 @@ class PlayerMessageTypeEnum(Enum):
 
 
 class PlayerMessage:
-    player: BlackJackPlayer
-    game: BlackJackGame
+    player: "BlackJackPlayer"
+    game: "BlackJackGame"
     type: PlayerMessageTypeEnum
     data: Optional[dict]
 

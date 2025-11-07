@@ -1,13 +1,15 @@
-from asyncio import CancelledError, Queue, Task
-import asyncio
-from typing import Any
+from typing import TYPE_CHECKING
+from asyncio import CancelledError, Queue, Task, sleep, wait_for
+from typing import Any, Optional
 from fastapi import WebSocketDisconnect
 from starlette.websockets import WebSocket
-from backend.model.BlackJackGameState import GameState
+from .PlayerMessage import PlayerMessage
+if TYPE_CHECKING:
+    from .BlackJackGame import BlackJackGame
+    from .BlackJackGameState import GameState
+
 from backend.model.BlackJack_game_models import Player
 from asyncio import create_task as ct
-
-from backend.model.PlayerMessage import PlayerMessage
 
 
 class BlackJackPlayer(Player):
@@ -17,14 +19,14 @@ class BlackJackPlayer(Player):
         self.ws: WebSocket | Any = ws
         self.ping_pong_queue = Queue(1)
         self.send_to_parent = False
-        self.game = None
-        self.outbound_queue = asyncio.Queue()
-        
+        self.game: Optional["BlackJackGame"] = None
+        self.outbound_queue = Queue()
+
         self.receiver_task: Task = ct(self.receive_loop())
         self.sender_task: Task = ct(self.send_loop())
-        
+
         self.ping_pong_task: Task = ct(self.websocket_ping_pong())
-        
+
         self.player_status: str = "Connected"
 
     def __hash__(self):
@@ -35,7 +37,7 @@ class BlackJackPlayer(Player):
             return self.player_name == other.player_name
         else:
             return False
-        
+
     @classmethod
     async def player_creation_cls(cls, ws, game):
         self = cls(ws)
@@ -45,7 +47,7 @@ class BlackJackPlayer(Player):
                 self.player_name = message_dict.get("username")
 
         self.game = game
-        
+
         return self
 
     async def receive_loop(self):
@@ -63,16 +65,15 @@ class BlackJackPlayer(Player):
             await self.disconnect_player()
         except Exception as e:
             print(f"Exception happened in player {self.player_name}, exception: {e}")
-            
-    
-    def send(self, data: GameState):
+
+    def send(self, data: "GameState"):
         self.outbound_queue.put_nowait(data)
-            
+
     async def send_loop(self):
         try:
             while True:
-                data = self.outbound_queue.get()
-                self.ws.send_json(data)
+                data = await self.outbound_queue.get()
+                await self.ws.send_json(data)
         except WebSocketDisconnect:
             print(f"Player {self.player_name} was disconnected")
             await self.disconnect_player()
@@ -82,11 +83,11 @@ class BlackJackPlayer(Player):
     async def websocket_ping_pong(self):
         try:
             while True:
-                await asyncio.sleep(5)
+                await sleep(5)
                 await self.ws.send_json({"PingPong": "Ping"})
                 try:
-                    await asyncio.wait_for(self.ping_pong_queue.get(), timeout=5)
-                except asyncio.TimeoutError:
+                    await wait_for(self.ping_pong_queue.get(), timeout=5)
+                except TimeoutError:
                     print(f"No Pong response from {self.ws}")
                     await self.ws.close(reason="Pong not received")
                     raise WebSocketDisconnect
@@ -104,12 +105,12 @@ class BlackJackPlayer(Player):
                 if self.ping_pong_task:
                     self.ping_pong_task.cancel()
                 if self.game:
-                    # await self.game.remove_player(self)
                     message = PlayerMessage(self, self.game, "Disconnect")
-                    self.game.
+                    await self.game.game_queue.put(message)
             except CancelledError:
                 print("Worker task and ping_pong_task were cancelled")
             except Exception as e:
                 print(f"Error happened in disconnect_player method. Error: {e}")
+            await self.ws.close()
 
         self.player_status = "Disconnected"

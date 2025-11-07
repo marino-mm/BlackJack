@@ -1,15 +1,19 @@
 from asyncio import Event, Queue, Task, sleep, wait
-from typing import List, Optional, Set
+from typing import List, Optional, Set, TYPE_CHECKING
 from backend.model.BlackJack_game_models import Deck, Hand, House
-from backend.model.BlackJackPlayer import BlackJackPlayer, GameState
-from backend.model.PlayerMessage import PlayerMessageTypeEnum
 from asyncio import create_task as ct
+
+from .BlackJackGameState import GameState
+from .PlayerMessage import PlayerMessageTypeEnum
+
+if TYPE_CHECKING:
+    from .BlackJackPlayer import BlackJackPlayer
 
 
 class BlackJackGame:
     def __init__(self):
-        self.all_players: List[BlackJackPlayer] = []
-        self.sitting_players: List[Optional[BlackJackPlayer]] = [None for _ in range(5)]
+        self.all_players: List["BlackJackPlayer"] = []
+        self.sitting_players: List[Optional["BlackJackPlayer"]] = [None for _ in range(5)]
         self.game_title = ""
 
         self.game_queue = Queue(100)
@@ -17,7 +21,7 @@ class BlackJackGame:
         self.house = House()
         self.deck = Deck()
 
-        self.active_player: Optional[BlackJackPlayer] = None
+        self.active_player: Optional["BlackJackPlayer"] = None
         self.active_hand: Optional[Hand] = None
         self.active_hand_index: int = -1
         self.active_player_index: int = -1
@@ -50,7 +54,7 @@ class BlackJackGame:
             elif message.type == PlayerMessageTypeEnum.UNKNOWN:
                 continue
 
-    async def add_player(self, player: BlackJackPlayer):
+    async def add_player(self, player: "BlackJackPlayer"):
         self.all_players.append(player)
         self.send_update_partial(player)
 
@@ -58,7 +62,7 @@ class BlackJackGame:
             self.game_status = "game_running"
             self._game_running.set()
 
-    async def remove_player(self, player: BlackJackPlayer):
+    async def remove_player(self, player: "BlackJackPlayer"):
         self.all_players.remove(player)
         if len(self.all_players) == 0:
             self.shutdown_game()
@@ -101,7 +105,7 @@ class BlackJackGame:
             if running_task != self.game_worker_task:
                 running_task.cancel()
 
-    def send_update_partial(self, player: Optional[BlackJackPlayer] = None):
+    def send_update_partial(self, player: Optional["BlackJackPlayer"] = None):
         game_state = GameState.build_partial(self)
         if player is not None:
             player.send(game_state)
@@ -109,7 +113,7 @@ class BlackJackGame:
             for temp_player in self.all_players:
                 temp_player.send(game_state)
 
-    def send_update_full(self, player: Optional[BlackJackPlayer] = None):
+    def send_update_full(self, player: Optional["BlackJackPlayer"] = None):
         game_state = GameState.build_full(self)
         if player is not None:
             player.send(game_state)
