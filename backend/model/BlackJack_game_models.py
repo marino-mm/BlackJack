@@ -237,7 +237,10 @@ class House(BasePlayer):
         print(f"House :{[self.hands[0].cards[0], '?']}")
 
     def partial_hand_json(self):
-        return [{"cards": [self.hands[0].cards[0].json_card(), {"rank": "?", "suit": None}]}]
+        if self.hands[0].cards:
+            return [{"cards": [self.hands[0].cards[0].json_card(), {"rank": "?", "suit": None}]}]
+        else:
+            return [{"cards": []}]
 
 
 class Game:
@@ -327,9 +330,11 @@ class Game:
                 TURN_STATUS = "PLAYING"
                 while True:
                     if TURN_STATUS == "PLAYING":
-                        print(f"House: {self.house.hands[0].get_partial_hand_str()}")
+                        print(
+                            f"House: {self.house.hands[0].get_partial_hand_str()}")
                         print(f"Player: {hand.cards}")
-                        print(f"What will player {player_index + 1} do?\n1) Hit\n2) Stand\n3) Double down\n4) Split")
+                        print(
+                            f"What will player {player_index + 1} do?\n1) Hit\n2) Stand\n3) Double down\n4) Split")
                         move = input("Your move: ")
                         if move == "1":
                             player.hit_hand(hand, self.deck.get_card())
