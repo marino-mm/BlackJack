@@ -14,6 +14,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 BACKEND_DIST = BASE_DIR / "backend"
 FRONTEND_DIST = BASE_DIR / "frontend" / "dist"
 FRONTEND_VANILLA_DIST = BASE_DIR / "frontend_vanilla" / "static" / "chat_room"
+FRONTEND_VANILLA_TEST = BASE_DIR / "frontend_vanilla" / "static" / "game_test"
 # mimetypes are needed to be set because of Windows registry
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
@@ -42,5 +43,5 @@ async def serve_react_index(request: Request, full_path: str):
 
 
 app.mount("/react", StaticFiles(directory=FRONTEND_DIST), name="static")
-app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST,
-          html=True, check_dir=True), name="static",)
+app.mount("/test", StaticFiles(directory=FRONTEND_VANILLA_TEST, html=True, check_dir=True), name="static",)
+app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True), name="static",)

@@ -30,7 +30,7 @@ class BlackJackGame:
         self.countdown_worker_task: Optional[Task] = None
 
         self.game_worker_task: Task = ct(self.game_worker(), name="game_worker_task")
-        self.game_phase_task: Task = ct(self.game_worker(), name="game_phase_task")
+        self.game_phase_task: Task = ct(self.game_phase(), name="game_phase_task")
         self.running_tasks: Set[Task] = set()
         self.running_tasks.add(self.game_worker_task)
 
