@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Game_test</title>
+  </head>
+  <body>
+    <h4>This is a testing site</h4>
+    <div id="context-div" style="padding: 5px;">
+      <div>Game phase:<p id="game-phase"></p></div>
+      <div>Time:<p id="game-time"></p></div>
+      <div>Players:<p id="game-players"></p></div>
+      <div>Context json: <p id="game-context"></p></div>
+    </div>
+    <div style="padding: 5px;">
+      <h3>Input fiends</h3>
+      <div>Username: <input type="text" id="input-name" /></div>
+    </div>
+    <div id="controlls-div" style="padding: 5px;">
+      <button id="connect-button" onclick="connect_to_ws()">Connect</button>
+      <button id="hit-button" onclick="to_do()">Hit</button>
+      <button id="double-down-button" onclick="to_do()">Double Down</button>
+      <button id="split-button" onclick="to_do()">Split</button>
+      <button id="hold-button" onclick="to_do()">Hold</button>
+    </div>
+  </body>
+</html>
+<script src="script.js"></script>
