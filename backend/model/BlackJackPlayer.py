@@ -1,15 +1,17 @@
-from typing import TYPE_CHECKING
 from asyncio import CancelledError, Queue, Task, sleep, wait_for
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
+
 from fastapi import WebSocketDisconnect
 from starlette.websockets import WebSocket
-from .PlayerMessage import PlayerMessage
+
 if TYPE_CHECKING:
     from .BlackJackGame import BlackJackGame
     from .BlackJackGameState import GameState
 
-from backend.model.BlackJack_game_models import Player
 from asyncio import create_task as ct
+
+from backend.model.BlackJack_game_models import Player
+from backend.model.PlayerMessage import PlayerMessage
 
 
 class BlackJackPlayer(Player):
@@ -22,10 +24,13 @@ class BlackJackPlayer(Player):
         self.game: Optional["BlackJackGame"] = None
         self.outbound_queue = Queue()
 
-        self.receiver_task: Task = ct(self.receive_loop())
-        self.sender_task: Task = ct(self.send_loop())
+        # self.receiver_task: Task = ct(self.receive_loop())
+        # self.sender_task: Task = ct(self.send_loop())
+        # self.ping_pong_task: Task = ct(self.websocket_ping_pong())
 
-        self.ping_pong_task: Task = ct(self.websocket_ping_pong())
+        self.receiver_task: Optional[Task] = None
+        self.sender_task: Optional[Task] = None
+        self.ping_pong_task: Optional[Task] = None
 
         self.player_status: str = "Connected"
 
@@ -47,6 +52,9 @@ class BlackJackPlayer(Player):
                 self.player_name = message_dict.get("username")
 
         self.game = game
+        self.receiver_task = ct(self.receive_loop())
+        self.sender_task = ct(self.send_loop())
+        # self.ping_pong_task = ct(self.websocket_ping_pong())
 
         return self
 
@@ -72,8 +80,8 @@ class BlackJackPlayer(Player):
     async def send_loop(self):
         try:
             while True:
-                data = await self.outbound_queue.get()
-                await self.ws.send_json(data)
+                data: GameState = await self.outbound_queue.get()
+                await self.ws.send_json(data.model_dump_json())
         except WebSocketDisconnect:
             print(f"Player {self.player_name} was disconnected")
             await self.disconnect_player()
@@ -83,7 +91,7 @@ class BlackJackPlayer(Player):
     async def websocket_ping_pong(self):
         try:
             while True:
-                await sleep(5)
+                await sleep(15)
                 await self.ws.send_json({"PingPong": "Ping"})
                 try:
                     await wait_for(self.ping_pong_queue.get(), timeout=5)

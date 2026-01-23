@@ -42,4 +42,5 @@ async def serve_react_index(request: Request, full_path: str):
 
 
 app.mount("/react", StaticFiles(directory=FRONTEND_DIST), name="static")
-app.mount("/",StaticFiles(directory=FRONTEND_VANILLA_DIST, html=True, check_dir=True),name="static",)
+app.mount("/", StaticFiles(directory=FRONTEND_VANILLA_DIST,
+          html=True, check_dir=True), name="static",)
