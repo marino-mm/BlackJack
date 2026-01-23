@@ -105,12 +105,12 @@ class BlackJackPlayer(Player):
                 if self.ping_pong_task:
                     self.ping_pong_task.cancel()
                 if self.game:
+                    # await self.game.remove_player(self)
                     message = PlayerMessage(self, self.game, "Disconnect")
                     await self.game.game_queue.put(message)
             except CancelledError:
                 print("Worker task and ping_pong_task were cancelled")
             except Exception as e:
                 print(f"Error happened in disconnect_player method. Error: {e}")
-            await self.ws.close()
 
         self.player_status = "Disconnected"
