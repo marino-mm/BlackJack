@@ -17,7 +17,7 @@ function connect_to_ws() {
         let json_message = JSON.parse(event.data);
         if ('PingPong' in json_message) {
             console.log(json_message);
-            socket.send(JSON.stringify({ 'messageType': 'PingPong' }));
+            socket.send(JSON.stringify({ 'messageType': 'PingPong', 'message': 'Pong' }));
         }
         // update_context(json_message);
         // update_frontend(json_message);

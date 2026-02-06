@@ -63,7 +63,11 @@ class BlackJackGame:
             self._game_running.set()
 
     async def remove_player(self, player: "BlackJackPlayer"):
-        self.all_players.remove(player)
+        try:
+            self.all_players.remove(player)
+        except ValueError:
+            pass
+        
         if len(self.all_players) == 0:
             self.shutdown_game()
         self.send_update_partial()

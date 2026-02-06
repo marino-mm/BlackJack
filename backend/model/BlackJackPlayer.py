@@ -2,7 +2,10 @@ from asyncio import CancelledError, Queue, Task, sleep, wait_for
 from typing import TYPE_CHECKING, Any, Optional
 
 from fastapi import WebSocketDisconnect
+from pydantic import TypeAdapter, ValidationError
 from starlette.websockets import WebSocket
+
+from backend.model.PlayerMessageJSON import IncomingMessage
 
 if TYPE_CHECKING:
     from .BlackJackGame import BlackJackGame
@@ -59,9 +62,14 @@ class BlackJackPlayer(Player):
         return self
 
     async def receive_loop(self):
+        incoming_adapter = TypeAdapter(IncomingMessage)
         try:
             while True:
                 message_dict = await self.ws.receive_json()
+                try:
+                    msg = incoming_adapter.validate_python(message_dict)
+                except ValidationError as e:
+                    print(f"Error validating JSON message: {e}")
                 if message_dict.get("messageType") == "PingPong":
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
