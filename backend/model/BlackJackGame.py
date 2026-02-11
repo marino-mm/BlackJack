@@ -1,4 +1,6 @@
 from asyncio import Event, Queue, Task, sleep, wait
+from enum import Enum, auto
+from tkinter import NO
 from typing import List, Optional, Set, TYPE_CHECKING
 from backend.model.BlackJack_game_models import Deck, Hand, House
 from asyncio import create_task as ct
@@ -8,7 +10,15 @@ from .PlayerMessage import PlayerMessageTypeEnum
 
 if TYPE_CHECKING:
     from .BlackJackPlayer import BlackJackPlayer
+    from .PlayerMessage import PlayerMessage
 
+
+class BlackJackGameStatus(Enum):
+    WAITING = auto()
+    MOVE_PHASE = auto()
+    DEAL_PHASE = auto()
+    ACTION_PHASE = auto()
+    END_PHASE = auto()
 
 class BlackJackGame:
     def __init__(self):
@@ -33,21 +43,21 @@ class BlackJackGame:
         self.game_phase_task: Task = ct(self.game_phase(), name="game_phase_task")
         self.running_tasks: Set[Task] = set()
         self.running_tasks.add(self.game_worker_task)
+        self.running_tasks.add(self.game_phase_task)
 
         self._next_hand = Event()
         self._game_running = Event()
-        self.game_status = "waiting"
+        self.game_status = BlackJackGameStatus.WAITING
 
     async def game_worker(self):
         while True:
-            message = await self.game_queue.get()
+            message: "PlayerMessage" = await self.game_queue.get()
             if message.type == PlayerMessageTypeEnum.JOIN:
                 await self.add_player(message.player)
             elif message.type == PlayerMessageTypeEnum.DISCONNECT:
                 await self.remove_player(message.player)
             elif message.type == PlayerMessageTypeEnum.MOVE:
-                if message.data.get("new_slot_index") is not None:
-                    self.move_slot(message.data)
+                self.move_slot(message)
             elif message.type == PlayerMessageTypeEnum.HAND_ACTION:
                 if message.player == self.active_player:
                     await self.poccess_players_move(message.data)
@@ -58,8 +68,8 @@ class BlackJackGame:
         self.all_players.append(player)
         self.send_update_partial(player)
 
-        if self.game_status == "waiting":
-            self.game_status = "game_running"
+        if self.game_status == BlackJackGameStatus.WAITING:
+            self.game_status = BlackJackGameStatus.MOVE_PHASE
             self._game_running.set()
 
     async def remove_player(self, player: "BlackJackPlayer"):
@@ -72,13 +82,18 @@ class BlackJackGame:
             self.shutdown_game()
         self.send_update_partial()
 
-    def move_slot(self, message):
-        user: BlackJackPlayer = message.get("player")
-        new_slot = message.get("new_slot_index")
+    def move_slot(self, message: "PlayerMessage"):
+        user: BlackJackPlayer = message.player
+        if message.data is not None:
+            new_slot = message.data.get("new_slot_index")
+        if new_slot is None:
+            return
+        
         try:
             old_index = self.sitting_players.index(user)
         except ValueError:
             old_index = None
+            
         target_slot = self.sitting_players[new_slot]
         if target_slot is None:
             self.sitting_players[new_slot] = user
@@ -103,7 +118,7 @@ class BlackJackGame:
 
     def shutdown_game(self):
         print("Game shut down")
-        self.game_status = "waiting"
+        self.game_status = BlackJackGameStatus.WAITING
         self._game_running.clear()
         for running_task in self.running_tasks:
             if running_task != self.game_worker_task:
@@ -136,6 +151,13 @@ class BlackJackGame:
             await sleep(1)
             self.countdown_time -= 1
         self.send_update_time()
+        
+    def there_is_a_sitting_player(self):
+        for seat in self.sitting_players:
+            if seat is not None:
+                return True
+        
+        return False
 
     async def game_phase(self):
         # game_move_phase >> game_deal_phase >> game_action_phase >> end_phase
@@ -143,24 +165,25 @@ class BlackJackGame:
             if self._game_running.is_set() is False:
                 await self._game_running.wait()
 
-            elif self.game_status == "game_move_phase":
+            elif self.game_status == BlackJackGameStatus.MOVE_PHASE:
                 await self.game_move_phase()
-                self.game_status = "game_deal_phase"
+                if self.there_is_a_sitting_player():
+                    self.game_status = BlackJackGameStatus.DEAL_PHASE
 
-            elif self.game_status == "game_deal_phase":
+            elif self.game_status == BlackJackGameStatus.DEAL_PHASE:
                 pass
                 await self.game_deal_phase()
-                self.game_status = "game_action_phase"
+                self.game_status = BlackJackGameStatus.ACTION_PHASE
 
-            elif self.game_status == "game_action_phase":
+            elif self.game_status == BlackJackGameStatus.ACTION_PHASE:
                 pass
                 await self.game_action_phase()
-                self.game_status = "end_phase"
+                self.game_status = BlackJackGameStatus.END_PHASE
 
-            elif self.game_status == "end_phase":
+            elif self.game_status == BlackJackGameStatus.END_PHASE:
                 pass
                 await self.game_end_phase()
-                self.game_status = "game_move_phase"
+                self.game_status = BlackJackGameStatus.MOVE_PHASE
 
     async def game_move_phase(self):
         self.game_title = "Moving phase"

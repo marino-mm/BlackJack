@@ -1,4 +1,5 @@
 from asyncio import CancelledError, Queue, Task, sleep, wait_for
+import pprint
 from typing import TYPE_CHECKING, Any, Optional
 
 from fastapi import WebSocketDisconnect
@@ -69,11 +70,12 @@ class BlackJackPlayer(Player):
                 try:
                     msg = incoming_adapter.validate_python(message_dict)
                 except ValidationError as e:
-                    print(f"Error validating JSON message: {e}")
+                    # print(f"Error validating JSON message: {e}")
+                    pprint.pp(incoming_adapter.json_schema())
                 if message_dict.get("messageType") == "PingPong":
                     self.ping_pong_queue.put_nowait(message_dict)
                 elif self.send_to_parent:
-                    player_message = PlayerMessage(self, self.game, message_dict["type"], message_dict)
+                    player_message = PlayerMessage(self, self.game, message_dict["messageType"], message_dict)
                     if self.game:
                         self.game.game_queue.put_nowait(player_message)
         except WebSocketDisconnect:
@@ -81,15 +83,16 @@ class BlackJackPlayer(Player):
             await self.disconnect_player()
         except Exception as e:
             print(f"Exception happened in player {self.player_name}, exception: {e}")
+            await self.disconnect_player()
 
     def send(self, data: "GameState"):
         self.outbound_queue.put_nowait(data)
-
+    
     async def send_loop(self):
         try:
             while True:
                 data: GameState = await self.outbound_queue.get()
-                await self.ws.send_json(data.model_dump_json())
+                await self.ws.send_text(data.model_dump_json(exclude_none=True))
         except WebSocketDisconnect:
             print(f"Player {self.player_name} was disconnected")
             await self.disconnect_player()

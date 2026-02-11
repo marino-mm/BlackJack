@@ -18,7 +18,7 @@ async def websocket_endpoint(ws: WebSocket):
     try:
         await ws.accept()
         blackjack_player = await BlackJackPlayer.player_creation_cls(ws, game)
-        await game.game_queue.put(PlayerMessage(blackjack_player, game, PlayerMessageTypeEnum.JOIN, None))
+        await game.game_queue.put(PlayerMessage(blackjack_player, game, "Join", None))
         # await game.add_player(blackjack_player)
         await blackjack_player.websocket_ping_pong()
     except CancelledError:

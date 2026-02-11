@@ -11,7 +11,7 @@ class InitialUsernameMessage(BaseModel):
 
 class ActionMessage(BaseModel):
     messageType: Literal["Action"]
-    message: str
+    message: Literal["hit", "stand", "double_down", "split"]
 
 class MoveSlotMessage(BaseModel):
     messageType: Literal["MoveSlot"]

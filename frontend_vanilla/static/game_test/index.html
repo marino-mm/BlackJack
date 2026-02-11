@@ -7,22 +7,27 @@
   <body>
     <h4>This is a testing site</h4>
     <div id="context-div" style="padding: 5px;">
-      <div>Game phase:<p id="game-phase"></p></div>
-      <div>Time:<p id="game-time"></p></div>
-      <div>Players:<p id="game-players"></p></div>
-      <div>Context json: <p id="game-context"></p></div>
+      <div>Game phase: <span id="game-phase"></span></div>
+      <div>Time: <span id="game-time"></span></div>
+      <div>Players: <span id="game-players"></span></div>
+      <div>Context json: <span id="game-context"></span></div>
     </div>
     <div style="padding: 5px;">
-      <h3>Input fiends</h3>
-      <div>Username: <input type="text" id="input-name" /></div>
+      <h3>Input fields</h3>
+      <div style="margin: 5px;">Username: <input type="text" id="input-name" /></div>
+      <button style="margin: 5px;" id="connect-button">Connect</button>
+      <button style="margin: 5px;" id="disconnect-button">Disconnect</button>
+    </div>
+    <div style="padding: 5px;">
+      <div style="margin: 5px;">Seat: <input type="number" id="input-seat-number" min="1" max="6" /></div>
+      <button style="margin: 5px;" id="move-button">Move seat</button>
     </div>
     <div id="controlls-div" style="padding: 5px;">
-      <button id="connect-button" onclick="connect_to_ws()">Connect</button>
-      <button id="hit-button" onclick="to_do()">Hit</button>
-      <button id="double-down-button" onclick="to_do()">Double Down</button>
-      <button id="split-button" onclick="to_do()">Split</button>
-      <button id="hold-button" onclick="to_do()">Hold</button>
+      <button style="margin: 5px;" id="hit-button">Hit</button>
+      <button style="margin: 5px;" id="double-down-button">Double Down</button>
+      <button style="margin: 5px;" id="split-button">Split</button>
+      <button style="margin: 5px;" id="hold-button">Hold</button>
     </div>
   </body>
 </html>
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
